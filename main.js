@@ -25,32 +25,45 @@ app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => app.quit());
 
-// ─── Listar janelas via xdotool ───────────────────────────────────────────────
+// ─── Listar janelas via wmctrl ───────────────────────────────────────────────
 ipcMain.handle("get-windows", async () => {
+    const windows = [];
+
+    // Tenta wmctrl primeiro (mais confiável no GNOME/Mutter)
     try {
-        // Pega todos os IDs de janelas com título visível
-        const ids = execSync("xdotool search --onlyvisible --name ''")
-            .toString()
-            .trim()
-            .split("\n")
-            .filter(Boolean);
-
-        const windows = [];
-        for (const id of ids) {
-            try {
-                const name = execSync(`xdotool getwindowname ${id}`).toString().trim();
-                if (name) windows.push({ id, name });
-            } catch (_) {}
+        const out = execSync("wmctrl -l").toString().trim();
+        for (const line of out.split("\n")) {
+            // Formato: 0x00400004  0 hostname  Título da Janela
+            const match = line.match(/^(0x[0-9a-f]+)\s+\S+\s+\S+\s+(.+)$/i);
+            if (match) {
+                const id = match[1];
+                const name = match[2].trim();
+                if (name && name !== "N/A") {
+                    windows.push({ id, name, tool: "wmctrl" });
+                }
+            }
         }
+    } catch (_) {}
 
-        // Remove duplicatas e ordena por nome
-        const unique = Array.from(new Map(windows.map(w => [w.name, w])).values())
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-        return unique;
-    } catch (e) {
-        return [];
+    // Fallback: xdotool (busca por todos os processos, sem filtro de visível)
+    if (windows.length === 0) {
+        try {
+            const ids = execSync("xdotool search --name '' 2>/dev/null")
+                .toString().trim().split("\n").filter(Boolean);
+            for (const id of ids) {
+                try {
+                    const name = execSync(`xdotool getwindowname ${id} 2>/dev/null`).toString().trim();
+                    if (name) windows.push({ id, name, tool: "xdotool" });
+                } catch (_) {}
+            }
+        } catch (_) {}
     }
+
+    // Remove duplicatas por nome e ordena
+    const unique = Array.from(new Map(windows.map(w => [w.name, w])).values())
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    return unique;
 });
 
 // ─── Tracking de coordenadas ──────────────────────────────────────────────────
