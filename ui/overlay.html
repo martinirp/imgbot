@@ -12,8 +12,8 @@
         }
         #selection { 
             position: absolute; 
-            border: 2px dashed #4ecca3; 
-            background: rgba(78, 204, 163, 0.2); 
+            border: 2px dashed #7c6af7; 
+            background: rgba(124, 106, 247, 0.2); 
             display: none; 
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
@@ -22,26 +22,30 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(13, 13, 20, 0.9);
-            color: white;
-            padding: 10px 20px;
+            background: rgba(13, 13, 20, 0.95);
+            color: #7c6af7;
+            padding: 12px 24px;
             border-radius: 8px;
-            border: 1px solid #2a2a45;
-            font-size: 14px;
+            border: 1px solid #7c6af7;
+            font-size: 15px;
+            font-weight: bold;
             pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
     </style>
 </head>
 <body>
-    <div class="hint">Clique e arraste para mapear uma área. (ESC para cancelar)</div>
+    <div class="hint">🔲 Segure e arraste com o botão DIREITO para mapear uma área. (ESC cancelar)</div>
     <div id="selection"></div>
     <script>
         const { ipcRenderer } = require('electron');
         let startX, startY, isDrawing = false;
         const sel = document.getElementById('selection');
 
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
         window.addEventListener('mousedown', (e) => {
+            if (e.button !== 2) return; // Só botão direito
             isDrawing = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -69,7 +73,7 @@
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (!isDrawing) return;
+            if (!isDrawing || e.button !== 2) return;
             isDrawing = false;
             
             const x = Math.min(startX, e.clientX);
@@ -77,7 +81,6 @@
             const w = Math.abs(e.clientX - startX);
             const h = Math.abs(e.clientY - startY);
             
-            // Só salva se tiver um tamanho mínimo (evitar cliques sem querer)
             if (w > 5 && h > 5) {
                 ipcRenderer.send('region-selected', { x, y, w, h });
             } else {
@@ -86,7 +89,7 @@
         });
 
         window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') ipcRenderer.send('region-canceled');
+            if (e.key === 'Escape') ipcRenderer.send('overlay-canceled');
         });
     </script>
 </body>

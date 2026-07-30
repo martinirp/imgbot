@@ -49,9 +49,12 @@
     </div>
     <div class="content">
         <div class="instructions">
-            <b>Passo 1:</b> Coloque o mouse no canto superior esquerdo do jogo e aperte <span class="key-badge">F7</span>.<br><br>
-            <b>Passo 2:</b> Aperte <span class="key-badge">F8</span> para desenhar uma área. Ela será calculada baseada na origem!<br>
-            <div id="origin-status" style="margin-top:10px; font-weight:600; color:var(--accent2)">Origem atual: (0, 0)</div>
+            <b>Passo 1:</b> Clique no botão abaixo e depois dê um clique <b>DIREITO</b> no canto superior esquerdo do jogo.<br>
+            <button class="btn-primary" onclick="ipcRenderer.send('start-origin-mode')" style="margin-top:8px;">📍 Setar Origem</button>
+            <div id="origin-status" style="margin-top:10px; font-weight:600; color:var(--accent2)">Origem atual: Não definida</div>
+            <br>
+            <b>Passo 2:</b> Clique abaixo e <b>SEGURE E ARRASTE O BOTÃO DIREITO</b> sobre a área do jogo.<br>
+            <button class="btn-primary" onclick="ipcRenderer.send('start-region-mode')" style="margin-top:8px;">🔲 Mapear Nova Área</button>
         </div>
         <div class="regions-list" id="regions-list">
             <div class="empty-state">Nenhuma área mapeada ainda.</div>
@@ -61,8 +64,6 @@
 </div>
 <script>
 const { ipcRenderer } = require("electron");
-
-ipcRenderer.send("start-calibration");
 
 let regions = [];
 

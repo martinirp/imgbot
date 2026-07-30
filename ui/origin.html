@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: rgba(0, 0, 0, 0.2); 
+            cursor: crosshair; 
+            user-select: none; 
+            font-family: sans-serif;
+            height: 100vh;
+        }
+        .hint {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 13, 20, 0.95);
+            color: #4ecca3;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: 1px solid #4ecca3;
+            font-size: 15px;
+            font-weight: bold;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="hint">🎯 Clique com o botão DIREITO no canto superior esquerdo do jogo (ESC cancelar)</div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        // Impede o menu de contexto padrão do botão direito
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        window.addEventListener('mousedown', (e) => {
+            // Apenas botão direito (2)
+            if (e.button === 2) {
+                ipcRenderer.send('origin-selected', { x: e.clientX, y: e.clientY });
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') ipcRenderer.send('overlay-canceled');
+        });
+    </script>
+</body>
+</html>

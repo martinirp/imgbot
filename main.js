@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const { execSync, exec } = require("child_process");
 const path = require("path");
 
@@ -32,43 +32,32 @@ app.on("window-all-closed", () => app.quit());
 // ─── Modo Área (F8 para abrir Overlay) ──────────────────────────────────────
 let overlayWindow = null;
 
-function createOverlay() {
-    if (overlayWindow) return;
-    overlayWindow = new BrowserWindow({
-        transparent: true,
-        frame: false,
-        fullscreen: true,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
-    });
-    overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));
-}
-
 let originX = 0;
 let originY = 0;
 
-ipcMain.on("start-calibration", () => {
-    globalShortcut.unregisterAll();
-    
-    globalShortcut.register("F7", () => {
-        try {
-            const mouseOut = sh("xdotool getmouselocation --shell");
-            const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
-            const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
-            originX = mx;
-            originY = my;
-            if (mainWindow) mainWindow.webContents.send("origin-set", { x: mx, y: my });
-        } catch (_) {}
+ipcMain.on("start-origin-mode", () => {
+    if (overlayWindow) return;
+    overlayWindow = new BrowserWindow({
+        transparent: true, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
-
-    globalShortcut.register("F8", () => {
-        createOverlay();
-    });
+    overlayWindow.loadFile(path.join(__dirname, "ui", "origin.html"));
 });
 
-ipcMain.on("stop-calibration", () => {
-    globalShortcut.unregisterAll();
+ipcMain.on("start-region-mode", () => {
+    if (overlayWindow) return;
+    overlayWindow = new BrowserWindow({
+        transparent: true, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+    });
+    overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));
+});
+
+ipcMain.on("origin-selected", (event, pt) => {
+    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
+    originX = pt.x;
+    originY = pt.y;
+    if (mainWindow) mainWindow.webContents.send("origin-set", pt);
 });
 
 ipcMain.on("region-selected", (event, bounds) => {
@@ -80,7 +69,7 @@ ipcMain.on("region-selected", (event, bounds) => {
     }
 });
 
-ipcMain.on("region-canceled", () => {
+ipcMain.on("overlay-canceled", () => {
     if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
 });
 
