@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <title>ImgBot – Coordenadas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0d0d14;
+            --surface: #13131f;
+            --surface2: #1a1a2e;
+            --border: #2a2a45;
+            --accent: #7c6af7;
+            --accent2: #4ecca3;
+            --text: #e8e8f0;
+            --muted: #6e6e9a;
+            --danger: #f75c5c;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: transparent;
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .app {
+            background: rgba(13, 13, 20, 0.92);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+        }
+
+        /* ─── TITLEBAR ─── */
+        .titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            -webkit-app-region: drag;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,0.02);
+            flex-shrink: 0;
+        }
+        .titlebar .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .titlebar .logo span {
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .titlebar .dot { width: 8px; height: 8px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+        .close-btn {
+            -webkit-app-region: no-drag;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            cursor: pointer;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .close-btn:hover { background: var(--danger); border-color: var(--danger); color: white; }
+
+        /* ─── CONTENT ─── */
+        .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+        /* ─── SCREEN: PICKER ─── */
+        #screen-picker {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--muted);
+        }
+
+        .search-box {
+            position: relative;
+        }
+        .search-box input {
+            width: 100%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 14px 10px 38px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus { border-color: var(--accent); }
+        .search-box input::placeholder { color: var(--muted); }
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .window-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .window-list::-webkit-scrollbar { width: 4px; }
+        .window-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .window-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .window-item:hover { border-color: var(--accent); background: rgba(124, 106, 247, 0.08); transform: translateX(2px); }
+        .window-item .win-icon { font-size: 18px; flex-shrink: 0; }
+        .window-item .win-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .window-item .win-id { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+        .refresh-btn {
+            background: rgba(124, 106, 247, 0.1);
+            border: 1px solid rgba(124, 106, 247, 0.3);
+            color: var(--accent);
+            border-radius: var(--radius);
+            padding: 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .refresh-btn:hover { background: rgba(124, 106, 247, 0.2); }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--muted);
+        }
+        .empty-state .icon { font-size: 36px; }
+        .empty-state p { font-size: 13px; }
+
+        /* ─── SCREEN: TRACKER ─── */
+        #screen-tracker {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            padding: 16px;
+            gap: 14px;
+        }
+
+        .back-btn {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 9px 14px;
+            color: var(--muted);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            align-self: flex-start;
+            flex-shrink: 0;
+        }
+        .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .target-badge {
+            background: linear-gradient(135deg, rgba(124,106,247,0.15), rgba(78,204,163,0.15));
+            border: 1px solid rgba(124,106,247,0.3);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .target-badge .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent2);
+            box-shadow: 0 0 8px var(--accent2);
+            animation: pulse 1.2s infinite;
+            flex-shrink: 0;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        .target-badge .target-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .coords-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .coord-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            text-align: center;
+        }
+        .coord-card.highlight {
+            border-color: rgba(124, 106, 247, 0.4);
+            background: rgba(124, 106, 247, 0.06);
+        }
+        .coord-card .label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+        .coord-card .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text);
+            transition: color 0.1s;
+        }
+        .coord-card.highlight .value { color: var(--accent); }
+
+        .win-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .info-row {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .info-row .info-label { font-size: 11px; color: var(--muted); }
+        .info-row .info-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--accent2); }
+
+        .loading {
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+
+    <!-- TITLEBAR -->
+    <div class="titlebar">
+        <div class="logo">
+            <div class="dot"></div>
+            <span>ImgBot</span>
+        </div>
+        <button class="close-btn" onclick="ipcRenderer.send('close-app')">✕</button>
+    </div>
+
+    <div class="content">
+
+        <!-- SCREEN 1: SELETOR DE JANELA -->
+        <div id="screen-picker">
+            <span class="section-title">Selecione a janela alvo</span>
+
+            <div class="search-box">
+                <span class="search-icon">⌕</span>
+                <input type="text" id="search-input" placeholder="Buscar por nome..." oninput="filterWindows(this.value)" />
+            </div>
+
+            <div class="window-list" id="window-list">
+                <div class="loading">Carregando janelas...</div>
+            </div>
+
+            <button class="refresh-btn" onclick="loadWindows()">↻ Atualizar lista</button>
+        </div>
+
+        <!-- SCREEN 2: TRACKER DE COORDENADAS -->
+        <div id="screen-tracker">
+            <button class="back-btn" onclick="goBack()">← Voltar</button>
+
+            <div class="target-badge">
+                <div class="live-dot"></div>
+                <div class="target-name" id="target-name">—</div>
+            </div>
+
+            <div>
+                <div class="section-title" style="margin-bottom: 10px;">Coordenadas relativas à janela</div>
+                <div class="coords-grid">
+                    <div class="coord-card highlight">
+                        <div class="label">X Relativo</div>
+                        <div class="value" id="rel-x">—</div>
+                    </div>
+                    <div class="coord-card highlight">
+                        <div class="label">Y Relativo</div>
+                        <div class="value" id="rel-y">—</div>
+                    </div>
+                    <div class="coord-card">
+                        <div class="label">X Absoluto</div>
+                        <div class="value" id="abs-x">—</div>
+                    </div>
+                    <div class="coord-card">
+                        <div class="label">Y Absoluto</div>
+                        <div class="value" id="abs-y">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title" style="margin-bottom: 10px;">Dimensões da janela</div>
+                <div class="win-info-grid">
+                    <div class="info-row">
+                        <span class="info-label">Largura</span>
+                        <span class="info-value" id="win-w">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Altura</span>
+                        <span class="info-value" id="win-h">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pos. X</span>
+                        <span class="info-value" id="win-x">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pos. Y</span>
+                        <span class="info-value" id="win-y">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const { ipcRenderer } = require("electron");
+
+let allWindows = [];
+
+async function loadWindows() {
+    const list = document.getElementById("window-list");
+    list.innerHTML = '<div class="loading">Carregando janelas...</div>';
+    allWindows = await ipcRenderer.invoke("get-windows");
+    renderWindows(allWindows);
+}
+
+function renderWindows(windows) {
+    const list = document.getElementById("window-list");
+    if (!windows.length) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <span class="icon">🪟</span>
+                <p>Nenhuma janela encontrada.</p>
+                <p>Certifique-se que o <b>xdotool</b> está instalado.</p>
+            </div>`;
+        return;
+    }
+    list.innerHTML = windows.map(w => `
+        <div class="window-item" onclick="selectWindow('${w.id}', ${JSON.stringify(w.name).replace(/'/g, "\\'")})" >
+            <span class="win-icon">🪟</span>
+            <div>
+                <div class="win-name">${w.name}</div>
+                <div class="win-id">ID: ${w.id}</div>
+            </div>
+        </div>
+    `).join("");
+}
+
+function filterWindows(query) {
+    const filtered = allWindows.filter(w => w.name.toLowerCase().includes(query.toLowerCase()));
+    renderWindows(filtered);
+}
+
+function selectWindow(id, name) {
+    document.getElementById("target-name").textContent = name;
+    document.getElementById("screen-picker").style.display = "none";
+    document.getElementById("screen-tracker").style.display = "flex";
+    ipcRenderer.send("start-tracking", id);
+}
+
+function goBack() {
+    ipcRenderer.send("stop-tracking");
+    document.getElementById("screen-tracker").style.display = "none";
+    document.getElementById("screen-picker").style.display = "flex";
+    ["rel-x","rel-y","abs-x","abs-y","win-w","win-h","win-x","win-y"].forEach(id => {
+        document.getElementById(id).textContent = "—";
+    });
+}
+
+ipcRenderer.on("coords-update", (_, data) => {
+    document.getElementById("rel-x").textContent = data.relX;
+    document.getElementById("rel-y").textContent = data.relY;
+    document.getElementById("abs-x").textContent = data.absX;
+    document.getElementById("abs-y").textContent = data.absY;
+    document.getElementById("win-w").textContent = data.winW + "px";
+    document.getElementById("win-h").textContent = data.winH + "px";
+    document.getElementById("win-x").textContent = data.winX;
+    document.getElementById("win-y").textContent = data.winY;
+});
+
+loadWindows();
+</script>
+</body>
+</html>
