@@ -2,269 +2,98 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8" />
-    <title>ImgBot – Calibração</title>
+    <title>ImgBot – Regiões</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         :root {
-            --bg: #0d0d14;
-            --surface: #13131f;
-            --surface2: #1a1a2e;
-            --border: #2a2a45;
-            --accent: #7c6af7;
-            --accent2: #4ecca3;
-            --text: #e8e8f0;
-            --muted: #6e6e9a;
-            --radius: 12px;
+            --bg: #0d0d14; --surface: #13131f; --surface2: #1a1a2e;
+            --border: #2a2a45; --accent: #7c6af7; --accent2: #4ecca3;
+            --text: #e8e8f0; --muted: #6e6e9a; --radius: 12px;
         }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: transparent;
-            color: var(--text);
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        .app {
-            background: rgba(13, 13, 20, 0.92);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.6);
-        }
-
-        .titlebar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 18px;
-            -webkit-app-region: drag;
-            border-bottom: 1px solid var(--border);
-            background: rgba(255,255,255,0.02);
-        }
-        .titlebar .logo {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 700;
-        }
-        .titlebar .logo span {
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+        body { font-family: 'Inter', sans-serif; background: transparent; color: var(--text); height: 100vh; overflow: hidden; user-select: none; }
+        .app { background: rgba(13,13,20,0.92); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 18px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 80px rgba(0,0,0,0.6); }
+        .titlebar { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; -webkit-app-region: drag; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+        .titlebar .logo { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+        .titlebar .logo span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .titlebar .dot { width: 8px; height: 8px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
-        
-        .close-btn {
-            -webkit-app-region: no-drag;
-            background: none;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            cursor: pointer;
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
+        .close-btn { -webkit-app-region: no-drag; background: none; border: 1px solid var(--border); color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
         .close-btn:hover { background: #f75c5c; border-color: #f75c5c; color: white; }
-
-        .content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 24px;
-            gap: 20px;
-        }
-
-        /* TELA DE INSTRUÇÕES */
-        #screen-intro {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            text-align: center;
-            gap: 20px;
-        }
-        .big-icon { font-size: 48px; }
-        .instructions {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--muted);
-        }
-        .instructions b { color: var(--text); }
-        .key-badge {
-            display: inline-block;
-            background: var(--accent);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-weight: bold;
-            font-family: 'JetBrains Mono', monospace;
-            box-shadow: 0 4px 12px rgba(124,106,247,0.4);
-        }
         
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            border: none;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-family: inherit;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: transform 0.1s;
-        }
-        .btn-primary:active { transform: scale(0.97); }
-
-        /* TELA DE RASTREIO */
-        #screen-tracker {
-            display: none;
-            flex-direction: column;
-            height: 100%;
-            gap: 20px;
-        }
+        .content { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; overflow: hidden; }
+        .instructions { background: rgba(124,106,247,0.1); border: 1px solid rgba(124,106,247,0.3); padding: 14px; border-radius: var(--radius); font-size: 13px; line-height: 1.5; color: #b6b6d3; }
+        .key-badge { display: inline-block; background: var(--accent); color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
         
-        .status-badge {
-            background: rgba(78,204,163,0.15);
-            border: 1px solid rgba(78,204,163,0.3);
-            color: var(--accent2);
-            padding: 12px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            justify-content: center;
-        }
-        .pulse-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--accent2);
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(0.7); opacity: 0.5; }
-        }
-
-        .coords-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .coord-card {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
-            text-align: center;
-        }
-        .coord-card.highlight {
-            border-color: rgba(124, 106, 247, 0.4);
-            background: rgba(124, 106, 247, 0.08);
-        }
-        .coord-card .label {
-            font-size: 11px; font-weight: 600; text-transform: uppercase;
-            color: var(--muted); margin-bottom: 10px;
-        }
-        .coord-card .value {
-            font-family: 'JetBrains Mono', monospace; font-size: 32px;
-            font-weight: 700; color: var(--text);
-        }
-        .coord-card.highlight .value { color: var(--accent); }
-
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            padding: 10px;
-            border-radius: 8px;
-            font-family: inherit;
-            cursor: pointer;
-            margin-top: auto;
-            transition: all 0.2s;
-        }
-        .btn-secondary:hover { border-color: var(--text); color: var(--text); }
+        .regions-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+        .regions-list::-webkit-scrollbar { width: 4px; }
+        .regions-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        
+        .empty-state { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+        
+        .region-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; position: relative; }
+        .r-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--accent2); margin-bottom: 10px; }
+        .r-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .r-grid div { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .r-grid div span { color: var(--muted); font-family: 'Inter', sans-serif; font-size: 11px; margin-right: 4px; }
+        
+        .btn-clear { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-family: inherit; font-size: 13px; }
+        .btn-clear:hover { border-color: #f75c5c; color: #f75c5c; }
     </style>
 </head>
 <body>
 <div class="app">
     <div class="titlebar">
-        <div class="logo"><div class="dot"></div><span>ImgBot Calibrador</span></div>
+        <div class="logo"><div class="dot"></div><span>ImgBot Áreas</span></div>
         <button class="close-btn" onclick="ipcRenderer.send('close-app')">✕</button>
     </div>
-
     <div class="content">
-        <!-- TELA 1: INSTRUÇÃO -->
-        <div id="screen-intro">
-            <div class="big-icon">🎯</div>
-            <div class="instructions">
-                Coloque o ponteiro do mouse exatamente no <b>Canto Superior Esquerdo</b> da janela do jogo (onde você quer que seja o X=0, Y=0).
-                <br><br>
-                Depois, aperte a tecla <br><br>
-                <span class="key-badge">F8</span>
-            </div>
-            <button class="btn-primary" id="btn-start" onclick="startCalibration()">Pronto para calibrar</button>
+        <div class="instructions">
+            Para mapear uma área, vá para o jogo e aperte <span class="key-badge">F8</span>. A tela vai escurecer e você pode clicar e arrastar para desenhar o quadrado!
         </div>
-
-        <!-- TELA 2: RASTREIO -->
-        <div id="screen-tracker">
-            <div class="status-badge">
-                <div class="pulse-dot"></div> Rastreador Ativo
-            </div>
-            <div class="coords-grid">
-                <div class="coord-card highlight">
-                    <div class="label">X Relativo</div>
-                    <div class="value" id="rel-x">0</div>
-                </div>
-                <div class="coord-card highlight">
-                    <div class="label">Y Relativo</div>
-                    <div class="value" id="rel-y">0</div>
-                </div>
-            </div>
-            <button class="btn-secondary" onclick="resetCalibration()">Recalibrar Nova Janela</button>
+        <div class="regions-list" id="regions-list">
+            <div class="empty-state">Nenhuma área mapeada ainda.</div>
         </div>
+        <button class="btn-clear" onclick="clearRegions()">Apagar Todas as Áreas</button>
     </div>
 </div>
-
 <script>
 const { ipcRenderer } = require("electron");
 
-function startCalibration() {
-    document.getElementById("btn-start").textContent = "Aguardando F8...";
-    document.getElementById("btn-start").style.opacity = "0.7";
-    ipcRenderer.send("start-calibration");
+ipcRenderer.send("start-calibration");
+
+let regions = [];
+
+function clearRegions() {
+    regions = [];
+    renderRegions();
 }
 
-ipcRenderer.on("calibration-done", (_, origin) => {
-    document.getElementById("screen-intro").style.display = "none";
-    document.getElementById("screen-tracker").style.display = "flex";
-    
-    // Inicia o tracking usando a origem definida
-    ipcRenderer.send("start-tracking", origin);
+function renderRegions() {
+    const list = document.getElementById("regions-list");
+    if (regions.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nenhuma área mapeada ainda.</div>';
+        return;
+    }
+    list.innerHTML = regions.map((r, i) => `
+        <div class="region-card">
+            <div class="r-title">Área ${i + 1}</div>
+            <div class="r-grid">
+                <div><span>X:</span> ${r.x}</div>
+                <div><span>Y:</span> ${r.y}</div>
+                <div><span>W (Largura):</span> ${r.w}px</div>
+                <div><span>H (Altura):</span> ${r.h}px</div>
+            </div>
+        </div>
+    `).join("");
+    // Scroll para o fim
+    list.scrollTop = list.scrollHeight;
+}
+
+ipcRenderer.on("new-region", (_, bounds) => {
+    regions.push(bounds);
+    renderRegions();
 });
-
-function resetCalibration() {
-    ipcRenderer.send("stop-tracking");
-    document.getElementById("screen-intro").style.display = "flex";
-    document.getElementById("screen-tracker").style.display = "none";
-    document.getElementById("btn-start").textContent = "Pronto para calibrar";
-    document.getElementById("btn-start").style.opacity = "1";
-}
 </script>
 </body>
 </html>

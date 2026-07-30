@@ -29,20 +29,26 @@ app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => app.quit());
 
-// ─── Calibração (F8) ────────────────────────────────────────────────────────
-ipcMain.on("start-calibration", (event) => {
+// ─── Modo Área (F8 para abrir Overlay) ──────────────────────────────────────
+let overlayWindow = null;
+
+function createOverlay() {
+    if (overlayWindow) return;
+    overlayWindow = new BrowserWindow({
+        transparent: true,
+        frame: false,
+        fullscreen: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+    });
+    overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));
+}
+
+ipcMain.on("start-calibration", () => {
     globalShortcut.unregisterAll();
-    
     globalShortcut.register("F8", () => {
-        try {
-            const mouseOut = sh("xdotool getmouselocation --shell");
-            const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
-            const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
-            
-            event.sender.send("calibration-done", { x: mx, y: my });
-        } catch (e) {
-            console.error(e);
-        }
+        createOverlay();
     });
 });
 
@@ -50,30 +56,13 @@ ipcMain.on("stop-calibration", () => {
     globalShortcut.unregister("F8");
 });
 
-// ─── Tracking de coordenadas ──────────────────────────────────────────────────
-let trackingInterval = null;
-let originX = 0;
-let originY = 0;
+ipcMain.on("region-selected", (event, bounds) => {
+    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
+    if (mainWindow) mainWindow.webContents.send("new-region", bounds);
+});
 
-ipcMain.on("start-tracking", (event, origin) => {
-    if (trackingInterval) clearInterval(trackingInterval);
-    originX = origin.x;
-    originY = origin.y;
-
-    trackingInterval = setInterval(() => {
-        try {
-            const mouseOut = sh("xdotool getmouselocation --shell");
-            const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
-            const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
-
-            event.sender.send("coords-update", {
-                relX: mx - originX,
-                relY: my - originY,
-                absX: mx,
-                absY: my
-            });
-        } catch (_) {}
-    }, 80);
+ipcMain.on("region-canceled", () => {
+    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
 });
 
 ipcMain.on("stop-tracking", () => {
