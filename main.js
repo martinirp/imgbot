@@ -38,7 +38,7 @@ let originY = 0;
 ipcMain.on("start-origin-mode", () => {
     if (overlayWindow) return;
     overlayWindow = new BrowserWindow({
-        transparent: true, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
+        transparent: true, opacity: 0.5, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
     overlayWindow.loadFile(path.join(__dirname, "ui", "origin.html"));
@@ -47,7 +47,7 @@ ipcMain.on("start-origin-mode", () => {
 ipcMain.on("start-region-mode", () => {
     if (overlayWindow) return;
     overlayWindow = new BrowserWindow({
-        transparent: true, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
+        transparent: true, opacity: 0.5, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
     overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));

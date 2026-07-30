@@ -5,32 +5,30 @@
         body { 
             margin: 0; 
             overflow: hidden; 
-            background: rgba(0, 0, 0, 0.4); 
+            background: transparent; 
             cursor: crosshair; 
             user-select: none; 
             font-family: sans-serif;
         }
         #selection { 
             position: absolute; 
-            border: 2px dashed #7c6af7; 
-            background: rgba(124, 106, 247, 0.2); 
+            border: 4px dashed white; 
+            background: rgba(255, 255, 255, 0.6); 
             display: none; 
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
         .hint {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(13, 13, 20, 0.95);
-            color: #7c6af7;
+            background: black;
+            color: white;
             padding: 12px 24px;
             border-radius: 8px;
-            border: 1px solid #7c6af7;
-            font-size: 15px;
+            border: 2px solid white;
+            font-size: 20px;
             font-weight: bold;
             pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
     </style>
 </head>
