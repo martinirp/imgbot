@@ -29,48 +29,32 @@ app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => app.quit());
 
-// ─── Modo Área (F8 para abrir Overlay) ──────────────────────────────────────
-let overlayWindow = null;
-
 let originX = 0;
 let originY = 0;
 
-ipcMain.on("start-origin-mode", () => {
-    if (overlayWindow) return;
-    overlayWindow = new BrowserWindow({
-        transparent: true, opacity: 0.5, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
-    });
-    overlayWindow.loadFile(path.join(__dirname, "ui", "origin.html"));
-});
-
-ipcMain.on("start-region-mode", () => {
-    if (overlayWindow) return;
-    overlayWindow = new BrowserWindow({
-        transparent: true, opacity: 0.5, frame: false, fullscreen: true, alwaysOnTop: true, skipTaskbar: true,
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
-    });
-    overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));
-});
-
-ipcMain.on("origin-selected", (event, pt) => {
-    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
+ipcMain.on("set-origin", (event, pt) => {
     originX = pt.x;
     originY = pt.y;
     if (mainWindow) mainWindow.webContents.send("origin-set", pt);
 });
 
-ipcMain.on("region-selected", (event, bounds) => {
-    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
+ipcMain.on("capture-mouse", (event) => {
+    try {
+        const mouseOut = sh("xdotool getmouselocation --shell");
+        const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
+        const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
+        event.sender.send("mouse-captured", { x: mx, y: my });
+    } catch (_) {
+        event.sender.send("mouse-captured", { x: 0, y: 0 });
+    }
+});
+
+ipcMain.on("save-region", (event, bounds) => {
     if (mainWindow) {
         bounds.relX = bounds.x - originX;
         bounds.relY = bounds.y - originY;
         mainWindow.webContents.send("new-region", bounds);
     }
-});
-
-ipcMain.on("overlay-canceled", () => {
-    if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
 });
 
 ipcMain.on("stop-tracking", () => {

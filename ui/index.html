@@ -49,12 +49,13 @@
     </div>
     <div class="content">
         <div class="instructions">
-            <b>Passo 1:</b> Clique no botão abaixo e depois dê um clique <b>DIREITO</b> no canto superior esquerdo do jogo.<br>
-            <button class="btn-primary" onclick="ipcRenderer.send('start-origin-mode')" style="margin-top:8px;">📍 Setar Origem</button>
-            <div id="origin-status" style="margin-top:10px; font-weight:600; color:var(--accent2)">Origem atual: Não definida</div>
-            <br>
-            <b>Passo 2:</b> Clique abaixo e <b>SEGURE E ARRASTE O BOTÃO DIREITO</b> sobre a área do jogo.<br>
-            <button class="btn-primary" onclick="ipcRenderer.send('start-region-mode')" style="margin-top:8px;">🔲 Mapear Nova Área</button>
+            <b>Mapeamento Sem Sobreposição (Timer)</b><br>
+            Como o Linux bloqueia as telas transparentes, usamos um cronômetro de 3 segundos para capturar a posição do mouse.<br><br>
+            
+            <button class="btn-primary" onclick="setOriginTimer()" id="btn-origin" style="margin-bottom:8px;">📍 Setar Origem (3s)</button>
+            <div id="origin-status" style="margin-bottom:15px; font-weight:600; color:var(--accent2)">Origem atual: Não definida</div>
+            
+            <button class="btn-primary" onclick="mapRegionTimer()" id="btn-region">🔲 Mapear Nova Área (Passo 1/2)</button>
         </div>
         <div class="regions-list" id="regions-list">
             <div class="empty-state">Nenhuma área mapeada ainda.</div>
@@ -66,6 +67,54 @@
 const { ipcRenderer } = require("electron");
 
 let regions = [];
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function waitAndCapture(btnId, prefixText) {
+    const btn = document.getElementById(btnId);
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    
+    for (let i = 3; i > 0; i--) {
+        btn.textContent = `${prefixText} em ${i}...`;
+        await sleep(1000);
+    }
+    
+    btn.textContent = "Capturando...";
+    const pt = await new Promise(resolve => {
+        ipcRenderer.once('mouse-captured', (_, coords) => resolve(coords));
+        ipcRenderer.send('capture-mouse');
+    });
+    
+    btn.textContent = originalText;
+    btn.disabled = false;
+    return pt;
+}
+
+async function setOriginTimer() {
+    const pt = await waitAndCapture('btn-origin', 'Posicione o mouse');
+    ipcRenderer.send('set-origin', pt);
+}
+
+async function mapRegionTimer() {
+    const btn = document.getElementById('btn-region');
+    // Ponto 1 (Top Left)
+    const pt1 = await waitAndCapture('btn-region', 'Ponto 1 (Top-Left)');
+    
+    btn.style.background = "linear-gradient(135deg, #f75c5c, #ff8a8a)";
+    // Ponto 2 (Bottom Right)
+    const pt2 = await waitAndCapture('btn-region', 'Ponto 2 (Bottom-Right)');
+    btn.style.background = "";
+    
+    const x = Math.min(pt1.x, pt2.x);
+    const y = Math.min(pt1.y, pt2.y);
+    const w = Math.abs(pt2.x - pt1.x);
+    const h = Math.abs(pt2.y - pt1.y);
+    
+    if (w > 5 && h > 5) {
+        ipcRenderer.send('save-region', { x, y, w, h });
+    }
+}
 
 function clearRegions() {
     regions = [];
