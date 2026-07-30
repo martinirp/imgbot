@@ -7,43 +7,64 @@ async function main() {
     console.log("==========================================");
     console.log("\nCarregando lista de janelas ativas...\n");
 
+    // Permitir passar o nome (ex: com.tibia.client) direto no terminal
+    const searchName = process.argv[2];
+
     const windows = await getWindows();
     const windowList = [];
+    let autoSelectedWindow = null;
+    let autoSelectedTitle = "";
 
-    // Pegar o título de todas as janelas
+    // Pegar o título de todas as janelas (mesmo as ocultas/sem nome)
     for (const win of windows) {
         try {
-            const title = await win.title;
-            // Só adiciona na lista se tiver um título válido
-            if (title && title.trim() !== "") {
-                windowList.push({ name: title, value: win });
+            let title = await win.title;
+            
+            // Se o usuário passou um nome específico no terminal, a gente busca direto
+            if (searchName && title && title.toLowerCase().includes(searchName.toLowerCase())) {
+                autoSelectedWindow = win;
+                autoSelectedTitle = title;
             }
+
+            if (!title || title.trim() === "") {
+                title = "[Janela sem título / Oculta]";
+            }
+            
+            windowList.push({ name: title, value: win });
         } catch (e) {
-            // Ignorar janelas que derem erro ao pegar título
+            // Ignorar erros
         }
     }
 
     if (windowList.length === 0) {
-        console.log("Nenhuma janela com título encontrada.");
-        console.log("Se você estiver num ambiente sem interface gráfica, isso é normal.");
+        console.log("Nenhuma janela encontrada (nem mesmo as ocultas).");
         return;
     }
 
-    // Filtrar janelas com o mesmo título para deixar a lista mais limpa
-    const uniqueList = windowList.filter((v, i, a) => a.findIndex(t => (t.name === v.name)) === i);
+    let targetWindow;
+    let title;
 
-    // Perguntar ao usuário qual janela ele quer
-    const answer = await inquirer.prompt([
-        {
-            type: "list",
-            name: "selectedWindow",
-            message: "Selecione o programa/janela que deseja automatizar:",
-            choices: uniqueList
-        }
-    ]);
+    if (autoSelectedWindow) {
+        targetWindow = autoSelectedWindow;
+        title = autoSelectedTitle;
+        console.log(`\n[+] Janela encontrada automaticamente: ${title}`);
+    } else {
+        // Filtrar duplicatas para não sujar a lista
+        const uniqueList = windowList.filter((v, i, a) => a.findIndex(t => (t.name === v.name)) === i);
 
-    const targetWindow = answer.selectedWindow;
-    const title = await targetWindow.title;
+        // Perguntar ao usuário qual janela ele quer
+        const answer = await inquirer.prompt([
+            {
+                type: "list",
+                name: "selectedWindow",
+                message: "Selecione a janela alvo:",
+                choices: uniqueList
+            }
+        ]);
+
+        targetWindow = answer.selectedWindow;
+        title = await targetWindow.title || "[Janela sem título]";
+    }
     
     console.log(`\n[+] Janela selecionada: ${title}`);
     console.log("[+] Mova o mouse para ver as posições relativas. Pressione CTRL+C para sair.\n");
