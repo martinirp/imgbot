@@ -45,20 +45,39 @@ function createOverlay() {
     overlayWindow.loadFile(path.join(__dirname, "ui", "overlay.html"));
 }
 
+let originX = 0;
+let originY = 0;
+
 ipcMain.on("start-calibration", () => {
     globalShortcut.unregisterAll();
+    
+    globalShortcut.register("F7", () => {
+        try {
+            const mouseOut = sh("xdotool getmouselocation --shell");
+            const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
+            const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
+            originX = mx;
+            originY = my;
+            if (mainWindow) mainWindow.webContents.send("origin-set", { x: mx, y: my });
+        } catch (_) {}
+    });
+
     globalShortcut.register("F8", () => {
         createOverlay();
     });
 });
 
 ipcMain.on("stop-calibration", () => {
-    globalShortcut.unregister("F8");
+    globalShortcut.unregisterAll();
 });
 
 ipcMain.on("region-selected", (event, bounds) => {
     if (overlayWindow) { overlayWindow.close(); overlayWindow = null; }
-    if (mainWindow) mainWindow.webContents.send("new-region", bounds);
+    if (mainWindow) {
+        bounds.relX = bounds.x - originX;
+        bounds.relY = bounds.y - originY;
+        mainWindow.webContents.send("new-region", bounds);
+    }
 });
 
 ipcMain.on("region-canceled", () => {

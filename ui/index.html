@@ -49,7 +49,9 @@
     </div>
     <div class="content">
         <div class="instructions">
-            Para mapear uma área, vá para o jogo e aperte <span class="key-badge">F8</span>. A tela vai escurecer e você pode clicar e arrastar para desenhar o quadrado!
+            <b>Passo 1:</b> Coloque o mouse no canto superior esquerdo do jogo e aperte <span class="key-badge">F7</span>.<br><br>
+            <b>Passo 2:</b> Aperte <span class="key-badge">F8</span> para desenhar uma área. Ela será calculada baseada na origem!<br>
+            <div id="origin-status" style="margin-top:10px; font-weight:600; color:var(--accent2)">Origem atual: (0, 0)</div>
         </div>
         <div class="regions-list" id="regions-list">
             <div class="empty-state">Nenhuma área mapeada ainda.</div>
@@ -79,8 +81,8 @@ function renderRegions() {
         <div class="region-card">
             <div class="r-title">Área ${i + 1}</div>
             <div class="r-grid">
-                <div><span>X:</span> ${r.x}</div>
-                <div><span>Y:</span> ${r.y}</div>
+                <div><span>X Rel:</span> ${r.relX}</div>
+                <div><span>Y Rel:</span> ${r.relY}</div>
                 <div><span>W (Largura):</span> ${r.w}px</div>
                 <div><span>H (Altura):</span> ${r.h}px</div>
             </div>
@@ -89,6 +91,10 @@ function renderRegions() {
     // Scroll para o fim
     list.scrollTop = list.scrollHeight;
 }
+
+ipcRenderer.on("origin-set", (_, origin) => {
+    document.getElementById("origin-status").textContent = `Origem atual: (${origin.x}, ${origin.y})`;
+});
 
 ipcRenderer.on("new-region", (_, bounds) => {
     regions.push(bounds);
