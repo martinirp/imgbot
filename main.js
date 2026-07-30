@@ -25,42 +25,47 @@ app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => app.quit());
 
-// ─── Listar janelas via wmctrl ───────────────────────────────────────────────
+// ─── Listar janelas via xprop (pega XWayland + X11) ─────────────────────────
 ipcMain.handle("get-windows", async () => {
     const windows = [];
 
-    // Tenta wmctrl primeiro (mais confiável no GNOME/Mutter)
+    // xprop _NET_CLIENT_LIST pega TODOS os clientes X11/XWayland registrados
     try {
-        const out = execSync("wmctrl -l").toString().trim();
-        for (const line of out.split("\n")) {
-            // Formato: 0x00400004  0 hostname  Título da Janela
-            const match = line.match(/^(0x[0-9a-f]+)\s+\S+\s+\S+\s+(.+)$/i);
-            if (match) {
-                const id = match[1];
-                const name = match[2].trim();
-                if (name && name !== "N/A") {
-                    windows.push({ id, name, tool: "wmctrl" });
-                }
-            }
+        const clientList = execSync("xprop -root _NET_CLIENT_LIST 2>/dev/null").toString();
+        const ids = clientList.match(/0x[0-9a-f]+/gi) || [];
+
+        for (const hexId of ids) {
+            try {
+                const nameProp = execSync(`xprop -id ${hexId} WM_NAME 2>/dev/null`).toString();
+                const nameMatch = nameProp.match(/WM_NAME\([^)]+\)\s*=\s*"(.+)"/);
+                if (!nameMatch) continue;
+                const name = nameMatch[1].trim();
+                if (!name) continue;
+                const decId = parseInt(hexId, 16).toString();
+                windows.push({ id: decId, name });
+            } catch (_) {}
         }
     } catch (_) {}
 
-    // Fallback: xdotool (busca por todos os processos, sem filtro de visível)
+    // Fallback: wmctrl se xprop não funcionar
     if (windows.length === 0) {
         try {
-            const ids = execSync("xdotool search --name '' 2>/dev/null")
-                .toString().trim().split("\n").filter(Boolean);
-            for (const id of ids) {
-                try {
-                    const name = execSync(`xdotool getwindowname ${id} 2>/dev/null`).toString().trim();
-                    if (name) windows.push({ id, name, tool: "xdotool" });
-                } catch (_) {}
+            const out = execSync("wmctrl -l 2>/dev/null").toString().trim();
+            for (const line of out.split("\n")) {
+                const match = line.match(/^(0x[0-9a-f]+)\s+\S+\s+\S+\s+(.+)$/i);
+                if (match) {
+                    const name = match[2].trim();
+                    const decId = parseInt(match[1], 16).toString();
+                    if (name && name !== "N/A") windows.push({ id: decId, name });
+                }
             }
         } catch (_) {}
     }
 
-    // Remove duplicatas por nome e ordena
+    // Filtra janelas de sistema e remove duplicatas
+    const SKIP = ["N/A", "gsd-", "ibus-", "mutter"];
     const unique = Array.from(new Map(windows.map(w => [w.name, w])).values())
+        .filter(w => !SKIP.some(s => w.name.startsWith(s)))
         .sort((a, b) => a.name.localeCompare(b.name));
 
     return unique;
