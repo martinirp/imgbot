@@ -7,8 +7,8 @@ async function main() {
     console.log("==========================================");
     console.log("\nCarregando lista de janelas ativas...\n");
 
-    // Permitir passar o nome (ex: com.tibia.client) direto no terminal
-    const searchName = process.argv[2];
+    // Busca automática pelo Tibia (ou por nome passado no terminal)
+    const searchName = process.argv[2] || "com.tibia.client";
 
     const windows = await getWindows();
     const windowList = [];
