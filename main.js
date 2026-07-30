@@ -2,6 +2,10 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const { execSync, exec } = require("child_process");
 const path = require("path");
 
+// Garante que o DISPLAY está disponível mesmo se lançado via SSH
+const ENV = { ...process.env, DISPLAY: process.env.DISPLAY || ":0" };
+const sh = (cmd) => execSync(cmd, { env: ENV }).toString();
+
 let mainWindow;
 
 function createWindow() {
@@ -31,12 +35,12 @@ ipcMain.handle("get-windows", async () => {
 
     // xprop _NET_CLIENT_LIST pega TODOS os clientes X11/XWayland registrados
     try {
-        const clientList = execSync("xprop -root _NET_CLIENT_LIST 2>/dev/null").toString();
+        const clientList = sh("xprop -root _NET_CLIENT_LIST 2>/dev/null");
         const ids = clientList.match(/0x[0-9a-f]+/gi) || [];
 
         for (const hexId of ids) {
             try {
-                const nameProp = execSync(`xprop -id ${hexId} WM_NAME 2>/dev/null`).toString();
+                const nameProp = sh(`xprop -id ${hexId} WM_NAME 2>/dev/null`);
                 const nameMatch = nameProp.match(/WM_NAME\([^)]+\)\s*=\s*"(.+)"/);
                 if (!nameMatch) continue;
                 const name = nameMatch[1].trim();
@@ -50,7 +54,7 @@ ipcMain.handle("get-windows", async () => {
     // Fallback: wmctrl se xprop não funcionar
     if (windows.length === 0) {
         try {
-            const out = execSync("wmctrl -l 2>/dev/null").toString().trim();
+            const out = sh("wmctrl -l 2>/dev/null").trim();
             for (const line of out.split("\n")) {
                 const match = line.match(/^(0x[0-9a-f]+)\s+\S+\s+\S+\s+(.+)$/i);
                 if (match) {
@@ -80,12 +84,12 @@ ipcMain.on("start-tracking", (event, windowId) => {
     trackingInterval = setInterval(() => {
         try {
             // Posição absoluta do mouse
-            const mouseOut = execSync("xdotool getmouselocation --shell").toString();
+            const mouseOut = sh("xdotool getmouselocation --shell");
             const mx = parseInt(mouseOut.match(/X=(\d+)/)?.[1] || "0");
             const my = parseInt(mouseOut.match(/Y=(\d+)/)?.[1] || "0");
 
             // Posição e tamanho da janela alvo
-            const geoOut = execSync(`xdotool getwindowgeometry --shell ${windowId}`).toString();
+            const geoOut = sh(`xdotool getwindowgeometry --shell ${windowId}`);
             const wx = parseInt(geoOut.match(/X=(\d+)/)?.[1] || "0");
             const wy = parseInt(geoOut.match(/Y=(\d+)/)?.[1] || "0");
             const ww = parseInt(geoOut.match(/WIDTH=(\d+)/)?.[1] || "0");
