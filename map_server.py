@@ -19,7 +19,7 @@ import json
 import time
 import threading
 import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
 MINIMAP_DIR = "minimap"
@@ -231,7 +231,14 @@ def push_position(x, y, z):
 
 # ─── Inicializacao ─────────────────────────────────────────────
 def run():
-    server = HTTPServer(("127.0.0.1", PORT), MapHandler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), MapHandler)
+    except NameError:
+        # Fallback se ThreadingHTTPServer nao estiver disponivel
+        import socketserver
+        class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer): pass
+        server = ThreadedHTTPServer(("127.0.0.1", PORT), MapHandler)
+
     url    = f"http://localhost:{PORT}"
     print(f"\n{'='*50}")
     print(f"  Tibia Map Viewer: {url}")
