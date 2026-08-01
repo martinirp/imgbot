@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tibia Map Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #080b12;
+      --surface:  rgba(12, 17, 32, 0.88);
+      --border:   rgba(80, 130, 255, 0.16);
+      --accent:   #4f9eff;
+      --accent2:  #a78bfa;
+      --green:    #22d3a5;
+      --yellow:   #fbbf24;
+      --red:      #f43f5e;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+    }
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg);
+      font-family:'Inter',sans-serif; color:var(--text); user-select:none; }
+
+    /* ── Canvas ───────────────────────────────────────────── */
+    #map-canvas { position:fixed; top:0; left:0; width:100%; height:100%;
+      cursor:grab; image-rendering:pixelated; }
+    #map-canvas.dragging { cursor:grabbing; }
+    #map-canvas.editing  { cursor:crosshair; }
+
+    /* ── Loader ───────────────────────────────────────────── */
+    #loader { position:fixed; inset:0; background:var(--bg); display:flex;
+      flex-direction:column; align-items:center; justify-content:center;
+      z-index:200; gap:18px; transition:opacity .4s; }
+    #loader.hidden { opacity:0; pointer-events:none; }
+    .loader-ring { width:48px; height:48px; border:3px solid rgba(79,158,255,.15);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loader-text { font-size:13px; color:var(--muted); }
+
+    /* ── Glass ────────────────────────────────────────────── */
+    .glass { background:var(--surface); border:1px solid var(--border);
+      border-radius:12px; backdrop-filter:blur(20px); }
+
+    /* ── Toolbar topo ─────────────────────────────────────── */
+    #toolbar { position:fixed; top:14px; left:50%; transform:translateX(-50%);
+      z-index:50; display:flex; align-items:center; gap:0; padding:0;
+      overflow:hidden; }
+    .tb-section { display:flex; align-items:center; gap:8px; padding:8px 16px; }
+    .tb-sep { width:1px; height:32px; background:var(--border); flex-shrink:0; }
+
+    /* Brand */
+    .brand { display:flex; align-items:center; gap:8px; }
+    .brand-dot { width:7px; height:7px; border-radius:50%; background:var(--accent);
+      box-shadow:0 0 8px var(--accent); animation:pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+    .brand-name { font-size:13px; font-weight:600; letter-spacing:.08em;
+      background:linear-gradient(90deg,var(--accent),var(--accent2));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+
+    /* Coords */
+    #coords { font-family:'JetBrains Mono',monospace; font-size:12px;
+      display:flex; gap:14px; }
+    #coords span { color:var(--muted); font-size:10px; margin-right:2px; }
+    #coord-x, #coord-y { color:var(--accent); }
+    #coord-z { color:var(--accent2); }
+
+    /* Botões de toolbar */
+    .tb-btn { display:flex; align-items:center; gap:6px; padding:6px 12px;
+      border-radius:8px; border:1px solid var(--border); background:transparent;
+      color:var(--muted); font-size:12px; font-family:'Inter',sans-serif;
+      cursor:pointer; transition:all .15s ease; white-space:nowrap; }
+    .tb-btn:hover { border-color:var(--accent); color:var(--accent);
+      background:rgba(79,158,255,.08); }
+    .tb-btn.active { border-color:var(--yellow); color:var(--bg);
+      background:var(--yellow); box-shadow:0 0 10px rgba(251,191,36,.35); }
+    .tb-btn.active:hover { background:var(--yellow); }
+    .tb-btn svg { width:13px; height:13px; flex-shrink:0; }
+    .tb-btn.danger:hover { border-color:var(--red); color:var(--red);
+      background:rgba(244,63,94,.08); }
+
+    /* ── Floor panel ──────────────────────────────────────── */
+    #floor-panel { position:fixed; left:14px; top:50%; transform:translateY(-50%);
+      z-index:50; padding:8px 6px; display:flex; flex-direction:column;
+      gap:4px; max-height:80vh; overflow-y:auto; }
+    #floor-panel::-webkit-scrollbar { width:2px; }
+    #floor-panel::-webkit-scrollbar-thumb { background:var(--border); }
+    .floor-label { font-size:9px; font-weight:600; letter-spacing:.1em;
+      color:var(--muted); text-align:center; margin-bottom:4px; text-transform:uppercase; }
+    .floor-btn { width:38px; height:34px; border:1px solid var(--border);
+      border-radius:7px; background:rgba(12,17,32,.7); color:var(--muted);
+      font-size:12px; font-family:'JetBrains Mono',monospace; cursor:pointer;
+      transition:all .15s ease; display:flex; align-items:center; justify-content:center; }
+    .floor-btn:hover:not(.empty) { border-color:var(--accent); color:var(--accent); }
+    .floor-btn.active { border-color:var(--accent); color:var(--bg);
+      background:var(--accent); box-shadow:0 0 10px rgba(79,158,255,.4); }
+    .floor-btn[data-z="7"].active { background:var(--green); border-color:var(--green);
+      box-shadow:0 0 10px rgba(34,211,165,.4); }
+    .floor-btn.empty { opacity:.2; cursor:default; }
+
+    /* ── Waypoint panel (direita) ─────────────────────────── */
+    #wp-panel { position:fixed; right:14px; top:50%; transform:translateY(-50%);
+      z-index:50; width:220px; max-height:70vh; display:flex; flex-direction:column;
+      transition:all .3s ease; }
+    #wp-panel.collapsed { width:38px; max-height:38px; overflow:hidden; }
+    #wp-header { display:flex; align-items:center; justify-content:space-between;
+      padding:8px 12px; cursor:pointer; flex-shrink:0; }
+    #wp-title { font-size:11px; font-weight:600; letter-spacing:.06em;
+      color:var(--text); text-transform:uppercase; }
+    #wp-toggle { background:none; border:none; color:var(--muted); cursor:pointer;
+      font-size:14px; line-height:1; padding:0; transition:transform .3s; }
+    #wp-panel.collapsed #wp-toggle { transform:rotate(180deg); }
+    #wp-count { font-size:10px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+    #wp-list { overflow-y:auto; flex:1; padding:0 8px 8px; }
+    #wp-list::-webkit-scrollbar { width:3px; }
+    #wp-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+    .wp-item { display:flex; align-items:center; gap:8px; padding:5px 6px;
+      border-radius:6px; font-size:11px; font-family:'JetBrains Mono',monospace;
+      color:var(--muted); cursor:pointer; transition:background .12s;
+      border:1px solid transparent; }
+    .wp-item:hover { background:rgba(79,158,255,.08); border-color:var(--border); }
+    .wp-item.active { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.3);
+      color:var(--yellow); }
+    .wp-num { width:20px; height:20px; border-radius:50%; background:var(--accent);
+      color:var(--bg); font-size:9px; font-weight:700; display:flex;
+      align-items:center; justify-content:center; flex-shrink:0; }
+    .wp-item:first-child .wp-num { background:var(--green); }
+    .wp-coords { flex:1; }
+    .wp-del { background:none; border:none; color:transparent; cursor:pointer;
+      font-size:12px; padding:0 2px; transition:color .12s; }
+    .wp-item:hover .wp-del { color:var(--red); }
+
+    .wp-empty { text-align:center; padding:20px 8px; font-size:11px;
+      color:var(--muted); line-height:1.6; }
+
+    /* ── Zoom controls ────────────────────────────────────── */
+    #zoom-panel { position:fixed; right:14px; bottom:70px; z-index:50;
+      display:flex; flex-direction:column; gap:4px; padding:8px; }
+    .zoom-btn { width:36px; height:36px; border:1px solid var(--border);
+      border-radius:9px; background:rgba(12,17,32,.7); color:var(--text);
+      font-size:18px; cursor:pointer; transition:all .15s; display:flex;
+      align-items:center; justify-content:center; }
+    .zoom-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .zoom-btn:active { transform:scale(.92); }
+    #zoom-level { text-align:center; font-family:'JetBrains Mono',monospace;
+      font-size:10px; color:var(--muted); padding:3px 0; }
+
+    /* ── Bot status ───────────────────────────────────────── */
+    #bot-status { position:fixed; left:14px; bottom:14px; z-index:50;
+      display:flex; align-items:center; gap:8px; padding:8px 14px;
+      font-size:11px; }
+    #bot-dot { width:7px; height:7px; border-radius:50%;
+      background:var(--muted); flex-shrink:0; transition:background .3s; }
+    #bot-dot.online { background:var(--green); box-shadow:0 0 6px var(--green);
+      animation:pulse 1.5s ease-in-out infinite; }
+    #bot-label { color:var(--muted); }
+    #bot-pos { font-family:'JetBrains Mono',monospace; color:var(--text); }
+
+    /* ── Bottom bar ───────────────────────────────────────── */
+    #bottom-bar { position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+      z-index:50; padding:7px 18px; display:flex; align-items:center;
+      gap:16px; font-size:11px; color:var(--muted); white-space:nowrap; }
+    #bottom-bar kbd { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+      border-radius:4px; padding:1px 5px; font-family:'JetBrains Mono',monospace;
+      font-size:9px; color:var(--text); margin:0 1px; }
+
+    /* ── Crosshair ────────────────────────────────────────── */
+    #crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      pointer-events:none; z-index:40; opacity:.25; }
+    #crosshair::before, #crosshair::after { content:''; position:absolute; background:var(--accent); }
+    #crosshair::before { width:1px; height:18px; left:50%; top:50%; transform:translate(-50%,-50%); }
+    #crosshair::after  { width:18px; height:1px; left:50%; top:50%; transform:translate(-50%,-50%); }
+
+    /* ── Toast ────────────────────────────────────────────── */
+    #toast { position:fixed; bottom:60px; left:50%; transform:translateX(-50%) translateY(16px);
+      z-index:300; padding:9px 18px; border-radius:9px; font-size:12px; font-weight:500;
+      background:rgba(12,17,32,.95); border:1px solid var(--accent); color:var(--accent);
+      opacity:0; transition:all .25s ease; pointer-events:none; }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ── Edit hint ────────────────────────────────────────── */
+    #edit-hint { position:fixed; top:70px; left:50%; transform:translateX(-50%);
+      z-index:50; padding:6px 16px; border-radius:8px; font-size:11px;
+      border-color:rgba(251,191,36,.3); color:var(--yellow); background:rgba(251,191,36,.07);
+      pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
+    #edit-hint.show { opacity:1; }
+
+    /* ── Trail info ───────────────────────────────────────── */
+    #trail-info { position:fixed; top:70px; right:250px; z-index:50;
+      padding:6px 14px; font-size:11px; font-family:'JetBrains Mono',monospace;
+      color:var(--red); border-color:rgba(244,63,94,.25);
+      background:rgba(244,63,94,.06); display:none; }
+    #trail-info.show { display:block; }
+  </style>
+</head>
+<body>
+
+<div id="loader"><div class="loader-ring"></div><div class="loader-text">Carregando mapa...</div></div>
+
+<canvas id="map-canvas"></canvas>
+<div id="crosshair"></div>
+
+<!-- ── Toolbar ─────────────────────────────────────────────────── -->
+<div id="toolbar" class="glass">
+  <div class="tb-section">
+    <div class="brand"><div class="brand-dot"></div><div class="brand-name">TIBIA MAP</div></div>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-section">
+    <div id="coords">
+      <div><span>X</span><span id="coord-x">—</span></div>
+      <div><span>Y</span><span id="coord-y">—</span></div>
+      <div><span>Z</span><span id="coord-z">—</span></div>
+    </div>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-section" style="gap:6px;">
+    <!-- Modo edição -->
+    <button class="tb-btn" id="btn-edit" title="Modo Edição de Rota (E)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
+      </svg>
+      Editar Rota
+    </button>
+    <div class="tb-sep" style="height:22px;"></div>
+    <!-- Loop -->
+    <button class="tb-btn" id="btn-loop" title="Fechar rota em loop (L)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M2 8a6 6 0 1 0 6-6"/><path d="M5 5L2 2 2 5"/>
+      </svg>
+      Loop
+    </button>
+    <!-- Salvar -->
+    <button class="tb-btn" id="btn-save" title="Salvar rota JSON">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 13h10M8 3v7M5 7l3 3 3-3"/>
+      </svg>
+      Salvar
+    </button>
+    <!-- Carregar -->
+    <button class="tb-btn" id="btn-load" title="Carregar rota JSON">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 13h10M8 10V3M5 6l3-3 3 3"/>
+      </svg>
+      Carregar
+    </button>
+    <div class="tb-sep" style="height:22px;"></div>
+    <!-- Limpar rota -->
+    <button class="tb-btn danger" id="btn-clear-route" title="Limpar waypoints">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M4 4l8 8M12 4l-8 8"/>
+      </svg>
+      Limpar
+    </button>
+    <!-- Limpar trilha -->
+    <button class="tb-btn danger" id="btn-clear-trail" title="Limpar trilha do bot">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 2"/>
+      </svg>
+      Trilha
+    </button>
+  </div>
+</div>
+
+<!-- ── Edit hint ──────────────────────────────────────────────── -->
+<div id="edit-hint" class="glass">✏️ Modo Edição · Clique para adicionar waypoints · Clique direito para remover</div>
+
+<!-- ── Floor panel ────────────────────────────────────────────── -->
+<div id="floor-panel" class="glass">
+  <div class="floor-label">Floor</div>
+</div>
+
+<!-- ── Waypoint panel ─────────────────────────────────────────── -->
+<div id="wp-panel" class="glass">
+  <div id="wp-header">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="wp-title">Waypoints</span>
+      <span id="wp-count">0</span>
+    </div>
+    <button id="wp-toggle">▲</button>
+  </div>
+  <div id="wp-list"><div class="wp-empty">Ative o modo edição<br>e clique no mapa</div></div>
+</div>
+
+<!-- ── Trail info ─────────────────────────────────────────────── -->
+<div id="trail-info" class="glass">● Trilha: <span id="trail-pts">0</span> pts</div>
+
+<!-- ── Zoom ───────────────────────────────────────────────────── -->
+<div id="zoom-panel" class="glass">
+  <button class="zoom-btn" id="btn-zoom-in">+</button>
+  <div id="zoom-level">1×</div>
+  <button class="zoom-btn" id="btn-zoom-out">−</button>
+  <button class="zoom-btn" id="btn-reset" style="font-size:13px;margin-top:4px;" title="Reset (R)">⌂</button>
+</div>
+
+<!-- ── Bot status ─────────────────────────────────────────────── -->
+<div id="bot-status" class="glass">
+  <div id="bot-dot"></div>
+  <span id="bot-label">Bot</span>
+  <span id="bot-pos">offline</span>
+</div>
+
+<!-- ── Bottom bar ─────────────────────────────────────────────── -->
+<div id="bottom-bar" class="glass">
+  <span><kbd>Drag</kbd> Mover</span>
+  <span><kbd>Scroll</kbd> Zoom</span>
+  <span><kbd>E</kbd> Editar</span>
+  <span><kbd>L</kbd> Loop</span>
+  <span><kbd>R</kbd> Reset</span>
+  <span><kbd>Del</kbd> Remover último</span>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="file-input" accept=".json" style="display:none" />
+
+<script>
+'use strict';
+
+// ─── Constantes ───────────────────────────────────────────────
+const TILE_PX  = 256;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 10;
+const MAX_TRAIL = 20000;
+
+// ─── Estado ───────────────────────────────────────────────────
+let manifest     = null;
+let currentFloor = 7;
+let viewX = 32768, viewY = 32000, zoom = 1.5;
+let tileCache    = new Map();
+let loadedCount  = 0;
+
+// Drag
+let dragging = false, dragStart = {x:0,y:0,vx:0,vy:0};
+let mouseDownPos = {x:0,y:0};
+let animFrame    = null;
+
+// Waypoints (rota planejada)
+let waypoints    = [];          // [{x,y,z}, ...]
+let editMode     = false;
+let loopMode     = false;
+let hoveredWp    = -1;
+
+// Trilha do bot (posicoes recebidas via SSE)
+let botPos       = null;        // {x,y,z} posicao atual
+let botTrail     = [];          // [{x,y,z}, ...] historico
+let sseConn      = null;
+let botOnline    = false;
+
+const canvas = document.getElementById('map-canvas');
+const ctx    = canvas.getContext('2d');
+
+// ─── Resize ───────────────────────────────────────────────────
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; draw(); }
+window.addEventListener('resize', resize);
+
+// ─── Manifest ─────────────────────────────────────────────────
+async function loadManifest() {
+  const r = await fetch('/manifest.json');
+  manifest = await r.json();
+  buildFloorButtons(manifest.floors);
+  currentFloor = manifest.floors.includes(7) ? 7 : manifest.floors[0];
+  centerOnFloor(currentFloor);
+  document.getElementById('loader').classList.add('hidden');
+  resize();
+  const total = Object.values(manifest.data).reduce((s,d)=>s+d.tile_count,0);
+  showToast(`${manifest.floors.length} floors · ${total} tiles`);
+  connectSSE();
+}
+
+// ─── Floor buttons ────────────────────────────────────────────
+function buildFloorButtons(floors) {
+  const panel = document.getElementById('floor-panel');
+  [...panel.querySelectorAll('.floor-btn')].forEach(b=>b.remove());
+  for (let z=0; z<=15; z++) {
+    const btn = document.createElement('button');
+    btn.className = 'floor-btn';
+    btn.dataset.z = z;
+    btn.textContent = z;
+    if (!floors.includes(z)) btn.classList.add('empty');
+    btn.addEventListener('click', () => {
+      if (!floors.includes(z)) { showToast(`Floor ${z} sem tiles`); return; }
+      switchFloor(z);
+    });
+    panel.appendChild(btn);
+  }
+  updateFloorButtons();
+}
+function updateFloorButtons() {
+  document.querySelectorAll('.floor-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.z) === currentFloor);
+  });
+  document.getElementById('coord-z').textContent = currentFloor;
+}
+function switchFloor(z) { currentFloor = z; updateFloorButtons(); scheduleDraw(); }
+function centerOnFloor(z) {
+  const d = manifest.data[String(z)];
+  if (d) { viewX = d.center_x; viewY = d.center_y; }
+}
+
+// ─── Tile loading ─────────────────────────────────────────────
+function getOrLoadTile(tx, ty, z) {
+  const key = `${tx}_${ty}_${z}`;
+  const cached = tileCache.get(key);
+  if (cached !== undefined) return cached;
+  const fd = manifest?.data[String(z)];
+  if (!fd || !fd.tiles.includes(`${tx}_${ty}`)) { tileCache.set(key,'error'); return 'error'; }
+  tileCache.set(key,'loading');
+  const img = new Image();
+  img.src = `/minimap/Minimap_Color_${tx}_${ty}_${z}.png`;
+  img.onload = () => { tileCache.set(key,img); loadedCount++; scheduleDraw(); };
+  img.onerror = () => { tileCache.set(key,'error'); };
+  return 'loading';
+}
+
+// ─── Coordenadas ──────────────────────────────────────────────
+function screenToWorld(sx, sy) {
+  return { x: viewX + (sx - canvas.width/2)  / zoom,
+           y: viewY + (sy - canvas.height/2) / zoom };
+}
+function worldToScreen(wx, wy) {
+  return { sx: (wx - viewX) * zoom + canvas.width/2,
+           sy: (wy - viewY) * zoom + canvas.height/2 };
+}
+
+// ─── Render ───────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Fundo
+  ctx.fillStyle = '#080b12'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  const wl = viewX - canvas.width  / (2*zoom);
+  const wt = viewY - canvas.height / (2*zoom);
+  const wr = viewX + canvas.width  / (2*zoom);
+  const wb = viewY + canvas.height / (2*zoom);
+
+  // Tiles
+  const stx = Math.floor(wl/TILE_PX)*TILE_PX;
+  const sty = Math.floor(wt/TILE_PX)*TILE_PX;
+  const tpx = TILE_PX * zoom;
+  ctx.save(); ctx.imageSmoothingEnabled = zoom < 1;
+  for (let ty=sty; ty<=wb+TILE_PX; ty+=TILE_PX) {
+    for (let tx=stx; tx<=wr+TILE_PX; tx+=TILE_PX) {
+      const tile = getOrLoadTile(tx, ty, currentFloor);
+      const sx = (tx - wl) * zoom, sy = (ty - wt) * zoom;
+      if (tile && tile !== 'loading' && tile !== 'error') {
+        ctx.drawImage(tile, sx, sy, tpx, tpx);
+      } else if (tile === 'loading') {
+        ctx.fillStyle = 'rgba(79,158,255,.03)'; ctx.fillRect(sx,sy,tpx,tpx);
+      }
+    }
+  }
+  ctx.restore();
+
+  // Grid em zoom alto
+  if (zoom >= 3) drawGrid(wl, wt, wr, wb);
+
+  // Trilha do bot
+  drawBotTrail();
+
+  // Rota planejada (waypoints)
+  drawRoute();
+
+  // Bot position
+  drawBotPos();
+
+  document.getElementById('zoom-level').textContent = `${zoom.toFixed(1)}×`;
+}
+
+function drawGrid(wl, wt, wr, wb) {
+  ctx.save(); ctx.strokeStyle='rgba(79,158,255,.06)'; ctx.lineWidth=.5;
+  for (let tx=Math.floor(wl/TILE_PX)*TILE_PX; tx<=wr; tx+=TILE_PX) {
+    const sx=(tx-wl)*zoom; ctx.beginPath(); ctx.moveTo(sx,0); ctx.lineTo(sx,canvas.height); ctx.stroke();
+  }
+  for (let ty=Math.floor(wt/TILE_PX)*TILE_PX; ty<=wb; ty+=TILE_PX) {
+    const sy=(ty-wt)*zoom; ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(canvas.width,sy); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Trilha do bot ─────────────────────────────────────────────
+function drawBotTrail() {
+  const pts = botTrail.filter(p => p.z === currentFloor);
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.lineWidth   = Math.max(1.5, zoom);
+  ctx.strokeStyle = 'rgba(244,63,94,0.55)';
+  ctx.lineJoin    = 'round';
+  ctx.lineCap     = 'round';
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const {sx, sy} = worldToScreen(p.x, p.y);
+    i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+  });
+  ctx.stroke();
+  ctx.restore();
+  document.getElementById('trail-pts').textContent = pts.length;
+  document.getElementById('trail-info').classList.toggle('show', pts.length > 0);
+}
+
+// ── Posicao atual do bot ──────────────────────────────────────
+function drawBotPos() {
+  if (!botPos || botPos.z !== currentFloor) return;
+  const {sx, sy} = worldToScreen(botPos.x, botPos.y);
+  ctx.save();
+  // Circulo externo pulsante (simula animacao via opacidade)
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+  ctx.beginPath(); ctx.arc(sx, sy, 9, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(244,63,94,${pulse * 0.25})`; ctx.fill();
+  // Circulo principal
+  ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI*2);
+  ctx.fillStyle = '#f43f5e'; ctx.fill();
+  ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+  // Continua animando
+  scheduleDraw();
+}
+
+// ── Rota planejada ────────────────────────────────────────────
+function drawRoute() {
+  if (waypoints.length === 0) return;
+
+  // Filtra waypoints do floor atual
+  const pts = waypoints;
+
+  // Linhas da rota
+  ctx.save();
+  ctx.lineWidth   = Math.max(1.5, zoom * 0.8);
+  ctx.strokeStyle = 'rgba(251,191,36,0.75)';
+  ctx.setLineDash([5 * zoom, 3 * zoom]);
+  ctx.lineJoin    = 'round';
+  ctx.beginPath();
+  pts.forEach((wp, i) => {
+    if (wp.z !== currentFloor) return;
+    const {sx, sy} = worldToScreen(wp.x, wp.y);
+    i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
+  });
+  if (loopMode && pts.length > 1) ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Marcadores de waypoint
+  pts.forEach((wp, i) => {
+    if (wp.z !== currentFloor) return;
+    const {sx, sy} = worldToScreen(wp.x, wp.y);
+    const r    = Math.max(7, Math.min(14, zoom * 4));
+    const isFirst = i === 0;
+    const isHov   = i === hoveredWp;
+
+    // Sombra
+    ctx.beginPath(); ctx.arc(sx, sy, r+2, 0, Math.PI*2);
+    ctx.fillStyle = isFirst ? 'rgba(34,211,165,.25)' : 'rgba(251,191,36,.2)';
+    ctx.fill();
+
+    // Circulo principal
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2);
+    ctx.fillStyle   = isFirst ? '#22d3a5' : (isHov ? '#f59e0b' : '#fbbf24');
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth   = isHov ? 2 : 1;
+    ctx.stroke();
+
+    // Numero
+    if (r >= 7) {
+      ctx.fillStyle = '#080b12';
+      ctx.font      = `bold ${Math.max(8, Math.min(11, r))}px 'JetBrains Mono', monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(i+1, sx, sy);
+    }
+  });
+
+  ctx.restore();
+}
+
+function scheduleDraw() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = requestAnimationFrame(draw);
+}
+
+// ─── Mouse events ─────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  mouseDownPos = {x:e.clientX, y:e.clientY};
+  dragging   = true;
+  dragStart  = {x:e.clientX, y:e.clientY, vx:viewX, vy:viewY};
+  if (!editMode) canvas.classList.add('dragging');
+});
+
+canvas.addEventListener('mousemove', e => {
+  const w = screenToWorld(e.clientX, e.clientY);
+  document.getElementById('coord-x').textContent = Math.round(w.x);
+  document.getElementById('coord-y').textContent = Math.round(w.y);
+
+  // Hover em waypoints
+  const oldHov = hoveredWp;
+  hoveredWp = findNearestWaypoint(e.clientX, e.clientY, 20);
+  if (hoveredWp !== oldHov) scheduleDraw();
+
+  if (!dragging) return;
+  const dx = (e.clientX - dragStart.x) / zoom;
+  const dy = (e.clientY - dragStart.y) / zoom;
+  viewX = dragStart.vx - dx;
+  viewY = dragStart.vy - dy;
+  scheduleDraw();
+});
+
+canvas.addEventListener('mouseup', e => {
+  const wasDrag = Math.hypot(e.clientX-mouseDownPos.x, e.clientY-mouseDownPos.y) > 5;
+  dragging = false;
+  canvas.classList.remove('dragging');
+
+  if (!wasDrag && editMode && e.button === 0) {
+    // Clique de adição de waypoint
+    const w = screenToWorld(e.clientX, e.clientY);
+    addWaypoint(Math.round(w.x), Math.round(w.y), currentFloor);
+  }
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (!editMode) return;
+  const idx = findNearestWaypoint(e.clientX, e.clientY, 30);
+  if (idx >= 0) removeWaypoint(idx);
+});
+
+canvas.addEventListener('mouseleave', () => { dragging = false; canvas.classList.remove('dragging'); });
+
+// Scroll zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  applyZoom(e.deltaY < 0 ? 1.12 : 1/1.12, e.clientX, e.clientY);
+}, {passive:false});
+
+// ─── Zoom ─────────────────────────────────────────────────────
+function applyZoom(factor, px=canvas.width/2, py=canvas.height/2) {
+  const oldZ = zoom;
+  zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+  if (zoom === oldZ) return;
+  const wx = viewX + (px - canvas.width/2)  / oldZ;
+  const wy = viewY + (py - canvas.height/2) / oldZ;
+  viewX = wx - (px - canvas.width/2)  / zoom;
+  viewY = wy - (py - canvas.height/2) / zoom;
+  scheduleDraw();
+}
+
+// ─── Waypoints ────────────────────────────────────────────────
+function addWaypoint(x, y, z) {
+  waypoints.push({x, y, z});
+  renderWaypointList();
+  scheduleDraw();
+  showToast(`W${waypoints.length} → X:${x} Y:${y} Z:${z}`);
+}
+
+function removeWaypoint(idx) {
+  waypoints.splice(idx, 1);
+  renderWaypointList();
+  scheduleDraw();
+}
+
+function findNearestWaypoint(sx, sy, threshPx) {
+  let best = -1, bestDist = threshPx;
+  waypoints.forEach((wp, i) => {
+    if (wp.z !== currentFloor) return;
+    const {sx:wx, sy:wy} = worldToScreen(wp.x, wp.y);
+    const d = Math.hypot(sx-wx, sy-wy);
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  return best;
+}
+
+function renderWaypointList() {
+  const list  = document.getElementById('wp-list');
+  const count = document.getElementById('wp-count');
+  count.textContent = waypoints.length;
+
+  if (waypoints.length === 0) {
+    list.innerHTML = '<div class="wp-empty">Ative o modo edição<br>e clique no mapa</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  waypoints.forEach((wp, i) => {
+    const div = document.createElement('div');
+    div.className = 'wp-item';
+    div.innerHTML = `
+      <div class="wp-num">${i+1}</div>
+      <div class="wp-coords">X:${wp.x} Y:${wp.y}<br><span style="color:var(--accent2);font-size:9px;">Z:${wp.z}</span></div>
+      <button class="wp-del" data-idx="${i}" title="Remover">✕</button>`;
+    div.addEventListener('mouseenter', () => {
+      // Pan para o waypoint
+      viewX = wp.x; viewY = wp.y; scheduleDraw();
+    });
+    div.querySelector('.wp-del').addEventListener('click', e => {
+      e.stopPropagation();
+      removeWaypoint(parseInt(e.target.dataset.idx));
+    });
+    list.appendChild(div);
+  });
+}
+
+// ─── Modo Edição ──────────────────────────────────────────────
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('btn-edit');
+  btn.classList.toggle('active', editMode);
+  canvas.classList.toggle('editing', editMode);
+  document.getElementById('edit-hint').classList.toggle('show', editMode);
+  showToast(editMode ? 'Modo edição ativado' : 'Modo edição desativado');
+}
+
+function toggleLoop() {
+  loopMode = !loopMode;
+  document.getElementById('btn-loop').classList.toggle('active', loopMode);
+  scheduleDraw();
+  showToast(loopMode ? 'Rota em loop' : 'Rota aberta');
+}
+
+// ─── Save / Load ──────────────────────────────────────────────
+function saveRoute() {
+  if (waypoints.length === 0) { showToast('Nenhum waypoint para salvar'); return; }
+  const data = JSON.stringify(waypoints, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `route_z${currentFloor}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`Rota salva (${waypoints.length} waypoints)`);
+}
+
+function loadRoute() {
+  document.getElementById('file-input').click();
+}
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      waypoints = Array.isArray(data) ? data : [];
+      renderWaypointList(); scheduleDraw();
+      showToast(`${waypoints.length} waypoints carregados`);
+    } catch { showToast('Erro: JSON inválido'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ─── Keyboard ─────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const step = 64 / zoom;
+  switch(e.key) {
+    case 'ArrowLeft':  viewX -= step; scheduleDraw(); break;
+    case 'ArrowRight': viewX += step; scheduleDraw(); break;
+    case 'ArrowUp':    viewY -= step; scheduleDraw(); break;
+    case 'ArrowDown':  viewY += step; scheduleDraw(); break;
+    case '+': case '=': applyZoom(1.2); break;
+    case '-': case '_': applyZoom(1/1.2); break;
+    case 'r': case 'R': resetView(); break;
+    case 'e': case 'E': toggleEdit(); break;
+    case 'l': case 'L': toggleLoop(); break;
+    case 'Delete': case 'Backspace':
+      if (waypoints.length > 0) removeWaypoint(waypoints.length-1);
+      break;
+  }
+  const n = parseInt(e.key);
+  if (!isNaN(n) && manifest?.floors.includes(n)) switchFloor(n);
+});
+
+// ─── Botões ───────────────────────────────────────────────────
+document.getElementById('btn-edit').addEventListener('click', toggleEdit);
+document.getElementById('btn-loop').addEventListener('click', toggleLoop);
+document.getElementById('btn-save').addEventListener('click', saveRoute);
+document.getElementById('btn-load').addEventListener('click', loadRoute);
+document.getElementById('btn-zoom-in').addEventListener('click',  () => applyZoom(1.3));
+document.getElementById('btn-zoom-out').addEventListener('click', () => applyZoom(1/1.3));
+document.getElementById('btn-reset').addEventListener('click',    resetView);
+document.getElementById('btn-clear-route').addEventListener('click', () => {
+  if (waypoints.length === 0) { showToast('Nenhum waypoint'); return; }
+  waypoints = []; renderWaypointList(); scheduleDraw(); showToast('Rota limpa');
+});
+document.getElementById('btn-clear-trail').addEventListener('click', () => {
+  botTrail = []; scheduleDraw(); showToast('Trilha limpa');
+});
+document.getElementById('wp-header').addEventListener('click', () => {
+  document.getElementById('wp-panel').classList.toggle('collapsed');
+  document.getElementById('wp-toggle').textContent =
+    document.getElementById('wp-panel').classList.contains('collapsed') ? '▼' : '▲';
+});
+
+function resetView() {
+  zoom = 1.5; centerOnFloor(currentFloor); scheduleDraw(); showToast('View resetada');
+}
+
+// ─── SSE: posicao ao vivo do bot ──────────────────────────────
+function connectSSE() {
+  if (sseConn) sseConn.close();
+  sseConn = new EventSource('/stream');
+
+  sseConn.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      if (!data || !data.x) return;
+      botPos = data;
+      botTrail.push({x:data.x, y:data.y, z:data.z});
+      if (botTrail.length > MAX_TRAIL) botTrail.shift();
+      if (!botOnline) { botOnline = true; updateBotStatus(); }
+      scheduleDraw();
+    } catch {}
+  };
+
+  sseConn.onerror = () => {
+    if (botOnline) { botOnline = false; updateBotStatus(); }
+  };
+}
+
+function updateBotStatus() {
+  const dot   = document.getElementById('bot-dot');
+  const label = document.getElementById('bot-pos');
+  dot.classList.toggle('online', botOnline);
+  if (!botOnline) { label.textContent = 'offline'; return; }
+  if (botPos) label.textContent = `X:${botPos.x} Y:${botPos.y} Z:${botPos.z}`;
+}
+
+// Atualiza o display do bot periodicamente
+setInterval(() => { if (botOnline && botPos) updateBotStatus(); }, 500);
+
+// ─── Toast ────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ─── Boot ─────────────────────────────────────────────────────
+loadManifest().catch(() => {
+  document.querySelector('.loader-text').textContent =
+    'Erro: rode map_server.py primeiro.';
+});
+</script>
+</body>
+</html>

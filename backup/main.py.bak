@@ -21,13 +21,6 @@ from utils.overlay import NFSRadarOverlay, ActionStatusOverlay
 from utils.window_manager import WindowManager
 from modules.battle import BattleManager
 from modules.walker import MinimapWalker
-
-# CoordWalker (navegacao por coordenadas absolutas via Map Viewer)
-try:
-    from utils.coord_walker import CoordWalker
-    COORD_WALKER_AVAILABLE = True
-except ImportError:
-    COORD_WALKER_AVAILABLE = False
 from modules.healer import AutoHealer
 
 # ==============================================================================
@@ -109,23 +102,6 @@ class TibiaBot:
                                    use_arrows=USE_ARROWS,
                                    sort_mode=self.config.get("sort_mode", "clockwise"),
                                    window_manager=self.window_manager)
-
-        # CoordWalker — carrega rota de coordenadas absolutas se configurada
-        self.coord_walker = None
-        coord_route = self.config.get("coord_route_file")
-        if coord_route and os.path.exists(coord_route) and COORD_WALKER_AVAILABLE:
-            try:
-                wps   = CoordWalker.load_route_file(coord_route)
-                floor = self.config.get("coord_floor", 7)
-                self.coord_walker = CoordWalker(
-                    self.minimap_roi, wps, floor=floor,
-                    walk_delay=self.config.get("walk_delay", WALK_DELAY),
-                    window_manager=self.window_manager
-                )
-                print(f"[CoordWalker] ✅ Rota '{os.path.basename(coord_route)}' carregada "
-                      f"({len(wps)} waypoints) | Floor inicial: {floor}")
-            except Exception as e:
-                print(f"[CoordWalker] ⚠️  Erro ao carregar rota: {e}")
         
         self.healer = AutoHealer(self.config, window_manager=self.window_manager)
 
@@ -270,10 +246,7 @@ class TibiaBot:
                             print(f"[{time.strftime('%H:%M:%S')}] [{status_text}] Hotkey '{self.attack_hotkey.upper()}' disparada!")
                     else:
                         # 3. MOVIMENTAÇÃO NO MINIMAP (Dispara se não estiver em combate ativo ou se o alvo estiver preso na parede)
-                        if self.coord_walker:
-                            walked, walk_msg = self.coord_walker.step_walk(full_frame)
-                        else:
-                            walked, walk_msg = self.walker.step_walk(full_frame)
+                        walked, walk_msg = self.walker.step_walk(full_frame)
 
                 # IMPRIME LOGS DE CAMINHADA NO CONSOLE (SEM SPAM DE 'BUSCANDO')
                 if not self.is_paused and walk_msg and "Buscando" not in walk_msg and "Aguardando" not in walk_msg:
@@ -431,90 +404,14 @@ def select_target_window():
     return False
 
 
-def select_coord_route():
-    """Seleciona uma rota de coordenadas absolutas (criada no Map Viewer)."""
-    if not COORD_WALKER_AVAILABLE:
-        print("\n[CoordWalker] Modulo nao disponivel. Verifique utils/coord_walker.py")
-        return False
-
-    # Busca rotas na pasta routes/
-    routes = CoordWalker.list_route_files("routes")
-
-    # Tambem busca na raiz do projeto (rotas salvas pelo browser)
-    import glob
-    for fpath in sorted(glob.glob("route_*.json")):
-        try:
-            import json as _json
-            with open(fpath) as f:
-                data = _json.load(f)
-            if isinstance(data, list) and data and isinstance(data[0], dict) and "x" in data[0]:
-                fname = os.path.basename(fpath)
-                if not any(r[0] == fname for r in routes):
-                    routes.append((fname, fpath, len(data)))
-        except Exception:
-            pass
-
-    if not routes:
-        print("\nNenhuma rota de coordenadas encontrada.")
-        print("Abra o Map Viewer, desenhe uma rota e salve o arquivo JSON.")
-        return False
-
-    print("\n------------------------------------------------")
-    print("      ROTAS DE COORDENADAS DISPONIVEIS          ")
-    print("------------------------------------------------")
-    for idx, (fname, fpath, count) in enumerate(routes, 1):
-        print(f" {idx}. {fname}  ({count} waypoints)")
-    print("------------------------------------------------")
-
-    try:
-        sel = int(input("Escolha o numero da rota (0 para cancelar): ")) - 1
-        if sel < 0:
-            return False
-        if 0 <= sel < len(routes):
-            fname, fpath, count = routes[sel]
-
-            floor_input = input(f"Floor inicial (7=surface, ENTER para 7): ").strip()
-            floor = int(floor_input) if floor_input.isdigit() else 7
-
-            config = load_config()
-            config["coord_route_file"] = fpath
-            config["coord_floor"]      = floor
-            save_config(config)
-            print(f"\n✅ Rota de coordenadas '{fname}' ativa! ({count} waypoints | Floor {floor})")
-            return True
-    except (ValueError, IndexError):
-        pass
-    print("Opcao invalida.")
-    return False
-
-
-def open_map_viewer():
-    """Abre o Map Viewer no navegador (inicia map_server.py se nao estiver rodando)."""
-    import subprocess, webbrowser
-    server_path = os.path.join(os.path.dirname(__file__), "map_server.py")
-    if not os.path.exists(server_path):
-        print("\n[MapViewer] map_server.py nao encontrado!")
-        return
-    print("\n[MapViewer] Iniciando servidor do mapa...")
-    subprocess.Popen([sys.executable, server_path],
-                     creationflags=getattr(subprocess, 'CREATE_NEW_CONSOLE', 0))
-    import time as _t; _t.sleep(1.0)
-    webbrowser.open("http://localhost:8765")
-    print("[MapViewer] Aberto em http://localhost:8765")
-
-
 def show_menu():
-    config    = load_config()
-    active_r  = config.get("active_route", "Nenhuma")
-    coord_r   = config.get("coord_route_file", None)
-    coord_lbl = os.path.basename(coord_r) if coord_r else "Nenhuma"
+    config = load_config()
+    active_r = config.get("active_route", "Nenhuma")
     target_win = config.get("target_window_title", "Tibia")
     print("\n------------------------------------------------")
     print("       PAINEL DE CONTROLE DE AUTOMAÇÃO         ")
     print("------------------------------------------------")
-    print(f" Janela Alvo:   [{target_win}]")
-    print(f" Rota (Setas):  [{active_r}]")
-    print(f" Rota (Coords): [{coord_lbl}]  ← Floor {config.get('coord_floor', 7)}")
+    print(f" Janela Alvo: [{target_win}] | Rota Ativa: [{active_r}]")
     print(f" Magia HP: '{config.get('spell_hp_hotkey', 'f1').upper()}' (<{config.get('spell_hp_percent', 80)}%) | Pot HP: '{config.get('pot_hp_hotkey', 'f2').upper()}' (<{config.get('pot_hp_percent', 50)}%)")
     print(f" Pot Mana: '{config.get('pot_mana_hotkey', 'f3').upper()}' (<{config.get('pot_mana_percent', 60)}%) | Food: '{config.get('food_hotkey', 'f10').upper()}' ({config.get('food_interval', 60.0)}s)")
     print("------------------------------------------------")
@@ -523,14 +420,10 @@ def show_menu():
     print(" 3. Calibrar Ícones das Setas do Minimap")
     print(" 4. Calibrar Regiões da Tela (Battle, Minimap, HP, Mana)")
     print(" 5. Configurar Hotkeys e Porcentagens de Cura")
-    print(" 6. Gravar Nova Rota de Waypoints no Minimap (sistema antigo)")
-    print(" 7. Selecionar Rota de Setas (sistema antigo)")
+    print(" 6. Gravar Nova Rota de Waypoints no Minimap")
+    print(" 7. Selecionar Arquivo de Rota Salvo")
     print(" 8. Selecionar Janela Alvo do Jogo (Tibia / OTServer)")
-    print("------------------------------------------------")
-    print(" 9. Selecionar Rota de Coordenadas (Map Viewer) ← NOVO")
-    print("10. Abrir Map Viewer no Navegador               ← NOVO")
-    print("------------------------------------------------")
-    print("11. Sair")
+    print(" 9. Sair")
     print("------------------------------------------------")
 
 
@@ -562,7 +455,7 @@ if __name__ == "__main__":
     # MENU CLI INTERATIVO PADRÃO
     while True:
         show_menu()
-        opcao = input("Escolha uma opção (1-11): ").strip()
+        opcao = input("Escolha uma opção (1-9): ").strip()
         if opcao == "1":
             bot = TibiaBot(preview_mode=False)
             bot.run()
@@ -583,13 +476,7 @@ if __name__ == "__main__":
             select_active_route()
         elif opcao == "8":
             select_target_window()
-        elif opcao == "9":
-            select_coord_route()
-        elif opcao == "10":
-            open_map_viewer()
-        elif opcao == "11":
+        else:
             print("Saindo...")
             break
-        else:
-            print("Opcao invalida.")
 
