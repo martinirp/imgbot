@@ -43,7 +43,15 @@ class CoordWalker:
         self.window_manager  = window_manager
         self.map_server_url  = map_server_url
 
-        self.tracker         = PositionTracker(minimap_roi)
+        from utils.calibrator import load_config
+        cfg = load_config()
+
+        if cfg.get("mem_pid") and cfg.get("mem_x_addr"):
+            from utils.memory_tracker import MemoryTracker
+            self.tracker = MemoryTracker(cfg)
+        else:
+            self.tracker = PositionTracker(minimap_roi)
+
         self.current_wp_idx  = 0
         self.current_pos     = None      # (x, y, z) ultima posicao conhecida
         self.last_walk_time  = 0.0
