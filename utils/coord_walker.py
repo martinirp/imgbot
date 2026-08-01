@@ -59,12 +59,51 @@ class CoordWalker:
         self.pixels_per_tile = 1.0 / scale if scale > 0 else 1.0
 
     # ─────────────────────────────────────────────────────────
-    #  Click no minimap
+    #  Movimento por seta direcional
+    # ─────────────────────────────────────────────────────────
+    def _send_arrow(self, dx, dy):
+        """
+        Envia a seta direcional correta baseado em (dx, dy).
+        Usa numpad para diagonais se disponivel.
+        Retorna (delta_x, delta_y) real aplicado.
+        """
+        # Decide a direcao dominante (ou diagonal)
+        use_diagonal = abs(dx) > 0 and abs(dy) > 0
+
+        if use_diagonal:
+            # Diagonal via numpad
+            if dx > 0 and dy < 0:   key = 'kp_page_up'    # NE
+            elif dx > 0 and dy > 0: key = 'kp_page_down'  # SE
+            elif dx < 0 and dy < 0: key = 'kp_home'       # NO
+            else:                   key = 'kp_end'         # SO
+            step_x = 1 if dx > 0 else -1
+            step_y = 1 if dy > 0 else -1
+        else:
+            if abs(dx) >= abs(dy):
+                key    = 'right' if dx > 0 else 'left'
+                step_x = 1 if dx > 0 else -1
+                step_y = 0
+            else:
+                key    = 'down' if dy > 0 else 'up'
+                step_x = 0
+                step_y = 1 if dy > 0 else -1
+
+        if self.window_manager:
+            self.window_manager.send_key(key)
+        else:
+            import pyautogui
+            pyautogui.press(key)
+
+        return step_x, step_y
+
+    # ─────────────────────────────────────────────────────────
+    #  Click no minimap (mantido para compatibilidade)
     # ─────────────────────────────────────────────────────────
     def _send_click(self, x, y):
         if self.window_manager:
             self.window_manager.send_click(x, y)
         else:
+            import pyautogui
             pyautogui.click(x, y)
 
     def _calc_minimap_click(self, char_x, char_y, target_x, target_y):
@@ -125,15 +164,15 @@ class CoordWalker:
     # ─────────────────────────────────────────────────────────
     def step_walk(self, full_frame):
         """
-        Executa um passo de navegacao por coordenadas.
+        Executa um passo de navegacao por teclas direcionais (setas).
         Retorna (walked: bool, msg: str)
         """
         now = time.time()
 
         if not self.waypoints:
-            return False, "Nenhum waypoint carregado (crie uma rota no Map Viewer)"
+            return False, "Nenhum waypoint carregado"
 
-        # 1. Atualiza posicao via template matching
+        # 1. Atualiza posicao via template matching periodicamente
         if now - self.last_track_time >= self.track_interval or self.current_pos is None:
             result = self.tracker.locate(full_frame, floor=self.current_floor)
             self.last_track_time = now
@@ -145,7 +184,7 @@ class CoordWalker:
                 self._push_position_async(x, y, z)
             elif self.current_pos is None:
                 conf = result["confidence"] if result else 0.0
-                return False, f"Localizando personagem no mapa... (confianca: {conf*100:.0f}%)"
+                return False, f"Localizando personagem... ({conf*100:.0f}%)"
 
         if self.current_pos is None:
             return False, "Aguardando localizacao inicial..."
@@ -165,33 +204,40 @@ class CoordWalker:
         # Floor diferente: pula waypoint
         if wp_z != cz:
             self.current_wp_idx += 1
-            return False, f"Pulando WP{self.current_wp_idx} (floor {wp_z} != atual {cz})"
+            return False, f"Pulando WP (floor {wp_z} != atual {cz})"
 
-        dist = math.hypot(wp_x - cx, wp_y - cy)
+        dx   = wp_x - cx
+        dy   = wp_y - cy
+        dist = math.hypot(dx, dy)
 
         # 3. Chegou ao waypoint?
         if dist <= self.min_distance:
-            self.current_wp_idx += 1
+            self.current_wp_idx = (self.current_wp_idx + 1) % len(self.waypoints)
             total = len(self.waypoints)
-            prox  = (self.current_wp_idx % total) + 1
-            return True, (f"✅ WP{self.current_wp_idx}/{total} alcancado! "
-                          f"Proximo: WP{prox} ({self.waypoints[self.current_wp_idx % total]['x']},"
-                          f"{self.waypoints[self.current_wp_idx % total]['y']})")
+            nxt = self.waypoints[self.current_wp_idx]
+            return True, (f"[WP alcancado] Proximo: WP{self.current_wp_idx+1}/{total} "
+                          f"({nxt['x']},{nxt['y']})")
 
-        # 4. Cooldown
+        # 4. Cooldown entre passos
         if now - self.last_walk_time < self.walk_delay:
-            return False, (f"Aguardando... → WP{self.current_wp_idx+1}"
-                           f"({wp_x},{wp_y}) dist={dist:.0f}t")
+            return False, (f"WP{self.current_wp_idx+1} ({wp_x},{wp_y}) "
+                           f"dist={dist:.0f}t")
 
-        # 5. Clique no minimap
-        click_x, click_y = self._calc_minimap_click(cx, cy, wp_x, wp_y)
-        self._send_click(click_x, click_y)
+        # 5. Manda a seta e atualiza posicao estimada (dead reckoning)
+        step_x, step_y = self._send_arrow(dx, dy)
+        self.current_pos = (cx + step_x, cy + step_y, cz)
         self.last_walk_time = now
 
         total = len(self.waypoints)
-        return True, (f"[CoordWalk] WP{self.current_wp_idx+1}/{total} "
-                      f"| ({cx},{cy}) → ({wp_x},{wp_y}) "
-                      f"| dist={dist:.0f}t | click=({click_x},{click_y})")
+        key_name = ''
+        if step_x == 1  and step_y == 0:  key_name = 'RIGHT'
+        elif step_x == -1 and step_y == 0: key_name = 'LEFT'
+        elif step_x == 0  and step_y == 1: key_name = 'DOWN'
+        elif step_x == 0  and step_y == -1: key_name = 'UP'
+        else: key_name = f'DIAG({step_x:+d},{step_y:+d})'
+
+        return True, (f"[{key_name}] WP{self.current_wp_idx+1}/{total} "
+                      f"| ({cx},{cy})->({wp_x},{wp_y}) dist={dist:.0f}t")
 
     # ─────────────────────────────────────────────────────────
     #  Utilitarios

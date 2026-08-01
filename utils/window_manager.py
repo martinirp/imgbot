@@ -159,6 +159,21 @@ class WindowManager:
                 mapping = {
                     'space': XK.XK_space,
                     '-': XK.XK_minus,
+                    # Setas direcionais
+                    'up':    XK.XK_Up,
+                    'down':  XK.XK_Down,
+                    'left':  XK.XK_Left,
+                    'right': XK.XK_Right,
+                    # Numpad (movimento diagonal no Tibia)
+                    'kp_up':        XK.XK_KP_Up,
+                    'kp_down':      XK.XK_KP_Down,
+                    'kp_left':      XK.XK_KP_Left,
+                    'kp_right':     XK.XK_KP_Right,
+                    'kp_home':      XK.XK_KP_Home,      # noroeste
+                    'kp_end':       XK.XK_KP_End,       # sudoeste
+                    'kp_page_up':   XK.XK_KP_Page_Up,   # nordeste
+                    'kp_page_down': XK.XK_KP_Page_Down, # sudeste
+                    # Funcoes
                     'f1': XK.XK_F1,
                     'f2': XK.XK_F2,
                     'f3': XK.XK_F3,
