@@ -1,6 +1,14 @@
 #!/bin/bash
-# Configura o display para não dar erro no Linux
-export DISPLAY=:0
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd "$DIR"
 
-# Roda o script forçando o Python do ambiente virtual
-./venv/bin/python main.py
+export QT_LOGGING_RULES="*.warning=false"
+export OPENCV_LOG_LEVEL=SILENT
+export PYTHONWARNINGS="ignore"
+
+if [ -f "./venv/bin/python3" ]; then
+    PYTHONUNBUFFERED=1 ./venv/bin/python3 main.py "$@"
+else
+    PYTHONUNBUFFERED=1 python3 main.py "$@"
+fi
+

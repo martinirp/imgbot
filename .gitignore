@@ -14,3 +14,7 @@ venv.bak/
 
 # Logs
 *.log
+
+# Configuration
+config.json
+
