@@ -184,11 +184,19 @@ def main():
     print("   LOCALIZADOR DE COORDS NA MEMORIA (Ancora por Mapa)")
     print("=" * 60)
 
-    # 1. Pega posicao pelo template matching
-    pos = get_position_from_tracker()
-    if pos is None:
-        sys.exit(1)
-    tx, ty, tz = pos
+    # 1. Pega posicao: via args (modo sudo) ou template matching
+    if len(sys.argv) == 4:
+        try:
+            tx, ty, tz = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+            print(f"[OK] Coordenadas recebidas por argumento: X={tx}  Y={ty}  Z={tz}\n")
+        except ValueError:
+            print("[ERRO] Argumentos invalidos. Use: script.py X Y Z")
+            sys.exit(1)
+    else:
+        pos = get_position_from_tracker()
+        if pos is None:
+            sys.exit(1)
+        tx, ty, tz = pos
 
     # 2. Encontra o Tibia
     pid = find_tibia_pid()
