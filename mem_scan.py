@@ -263,12 +263,12 @@ def main():
 
     print("\n 1. Deixe o personagem PARADO.")
     input(" 2. Quando estiver parado, pressione ENTER aqui...")
-    snap_y1 = take_snapshot(pid, regions)
+    snap_y_base = take_snapshot(pid, regions)  # Snapshot base para comparação cumulativa
 
     print("\n 3. Ande exatamente 1 tile para BAIXO e pare.")
     input(" 4. Quando parar, pressione ENTER aqui...")
-    snap_y2 = take_snapshot(pid, regions)
-    y_candidates = find_candidates(snap_y1, snap_y2, delta=+1)
+    snap_y_cur = take_snapshot(pid, regions)
+    y_candidates = find_candidates(snap_y_base, snap_y_cur, delta=+1)
     print(f"[OK] {len(y_candidates)} candidatos para Y encontrados.")
 
     rounds = 0
