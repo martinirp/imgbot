@@ -257,17 +257,25 @@ def main():
     print(f"[OK] {len(y_candidates)} candidatos para Y encontrados.")
 
     rounds = 0
+    best_y_candidates = y_candidates  # Guarda o melhor resultado caso zere
     while len(y_candidates) > 5 and rounds < 5:
         rounds += 1
         print(f"\n 5. Ande mais 1 tile para BAIXO e pare. (Rodada {rounds})")
+        print("   IMPORTANTE: Ande apenas 1 tile e pare completamente antes de pressionar ENTER.")
         input(f" 6. Quando parar, pressione ENTER aqui...")
         snap_prev = snap_y2
         snap_y2 = take_snapshot(pid, regions)
-        y_candidates = filter_candidates(y_candidates, snap_prev, snap_y2, delta=+1)
+        new_candidates = filter_candidates(y_candidates, snap_prev, snap_y2, delta=+1)
+        if len(new_candidates) == 0:
+            print(f"[AVISO] Filtragem zerou os candidatos (você pode ter andado mais de 1 tile).")
+            print(f"        Mantendo os {len(y_candidates)} candidatos da rodada anterior.")
+            break  # Mantém y_candidates como estava
+        y_candidates = new_candidates
+        best_y_candidates = y_candidates
         print(f"[OK] Filtrado! Restam {len(y_candidates)} candidatos.")
 
     if not y_candidates:
-        print("[ERRO] Nenhum candidato de Y encontrado.")
+        print("[ERRO] Nenhum candidato de Y encontrado. Tente novamente.")
         sys.exit(1)
 
     print(f"\n[RESULTADO] Melhores candidatos para Y:")
