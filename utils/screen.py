@@ -12,21 +12,10 @@ def get_sct():
 
 def take_screenshot(region=None):
     """
-    Captura a tela inteira, ou tenta capturar diretamente a janela do Tibia (Linux)
-    para evitar telas pretas do Wayland/mss e manter coordenadas relativas perfeitas.
+    Captura a tela inteira via mss (comprovadamente funcional).
+    O WindowManager/XGetImage foi removido pois retorna imagem preta para
+    apps OpenGL/aceleração de hardware (como o Tibia).
     """
-    try:
-        from utils.window_manager import WindowManager
-        wm = WindowManager("Tibia")
-        if wm.win:
-            img = wm.get_screenshot()
-            if img is not None and img.size > 0:
-                if region is not None:
-                    return crop_roi(img, region)
-                return img
-    except Exception:
-        pass
-
     sct = get_sct()
     if region is None:
         monitor = sct.monitors[0]
