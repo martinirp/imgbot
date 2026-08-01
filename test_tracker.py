@@ -122,8 +122,14 @@ def main():
             conf = result["confidence"] if result else 0.0
             print(f"  [FALHA] Match nao encontrado.  Confianca={conf*100:.1f}%  Tempo={elapsed*1000:.0f}ms")
             print(f"  Dica: verifique se o minimap_roi esta correto e o jogo esta aberto.")
-            cv2.imshow("Position Tracker - Template Matching",
-                       np.zeros((300, 600, 3), dtype=np.uint8))
+            
+            # Mostra o que ele tentou recortar mesmo na falha
+            x0, y0, w, h = roi
+            minimap_crop = full_frame[y0:y0+h, x0:x0+w]
+            if minimap_crop.size > 0:
+                cv2.imshow("Position Tracker - Template Matching", minimap_crop)
+            else:
+                cv2.imshow("Position Tracker - Template Matching", np.zeros((300, 600, 3), dtype=np.uint8))
 
     if live_mode:
         print("  Pressione ESC ou Q para sair. S para screenshot.\n")
