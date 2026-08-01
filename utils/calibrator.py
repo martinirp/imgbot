@@ -42,22 +42,28 @@ def save_config(config):
 
 def get_calibrator_frame():
     """
-    Obtém a captura de tela diretamente da janela do jogo vinculada (WindowManager).
-    Traz a janela do jogo para a frente (primeiro plano) para evitar que o VSCode ou Terminal fiquem por cima no print.
+    Obtém a captura da tela inteira (Desktop), mas tenta trazer a janela do jogo
+    para a frente (primeiro plano) antes de capturar, garantindo que o jogo não
+    fique escondido atrás do terminal.
+    As coordenadas SEMPRE serão absolutas em relação à tela, pois o bot usa 
+    coordenadas absolutas.
     """
+    import time
     config = load_config()
     target_title = config.get("target_window_title", "Tibia")
+    win_name = "Tela Cheia (Desktop)"
+    
     try:
         from utils.window_manager import WindowManager
         wm = WindowManager(target_title)
         if wm.win:
             wm.raise_window()
-            frame = wm.get_screenshot()
-            if frame is not None and frame.size > 0:
-                return frame, wm.win_name
+            win_name = f"Tela Cheia c/ Janela '{wm.win_name}'"
+            time.sleep(0.5) # Dá tempo do SO desenhar a janela na frente
     except Exception:
         pass
-    return take_screenshot(), "Tela Cheia (Desktop)"
+        
+    return take_screenshot(), win_name
 
 def select_region(title="Selecione a Regiao"):
     frame, win_name = get_calibrator_frame()
