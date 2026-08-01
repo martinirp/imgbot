@@ -17,7 +17,7 @@ def take_screenshot(region=None):
     """
     sct = get_sct()
     if region is None:
-        monitor = sct.monitors[1]
+        monitor = sct.monitors[0]
     else:
         x, y, w, h = region
         monitor = {"top": int(y), "left": int(x), "width": int(w), "height": int(h)}
