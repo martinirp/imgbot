@@ -213,74 +213,102 @@ def main():
     # 4. Busca na memoria
     cands_16, cands_32 = find_xyz_addresses(pid, regions, tx, ty, tz)
 
-    # 5. Inicializa lista com ultimos valores conhecidos
+    # 5. Deduplica: uint32 e uint16 no mesmo endereco sao a mesma coisa
+    seen = set()
     all_cands = []
     for ax, ay, az in cands_16:
-        all_cands.append((ax, ay, az, "<H", tx, ty, tz))
+        key = (ax, ay, az)
+        if key not in seen:
+            seen.add(key)
+            all_cands.append({"ax": ax, "ay": ay, "az": az, "fmt": "<H",
+                               "lx": tx, "ly": ty, "lz": tz})
     for ax, ay, az in cands_32:
-        all_cands.append((ax, ay, az, "<I", tx, ty, tz))
+        key = (ax, ay, az)
+        if key not in seen:
+            seen.add(key)
+            all_cands.append({"ax": ax, "ay": ay, "az": az, "fmt": "<I",
+                               "lx": tx, "ly": ty, "lz": tz})
 
     if not all_cands:
         print("\n[ERRO] Nenhum candidato encontrado.")
-        print("Dica: verifique se as coordenadas iniciais estao corretas.")
         sys.exit(1)
 
-    # 6. Filtro interativo
+    print(f"\n[Inicio] {len(all_cands)} candidatos unicos:")
+    for i, c in enumerate(all_cands):
+        fmt = c["fmt"]
+        print(f"  [{i}] {hex(c['ax'])}  X={read_val(pid,c['ax'],fmt)}  Y={read_val(pid,c['ay'],fmt)}  Z={read_val(pid,c['az'],fmt)}")
+
+    # 6. Filtro preciso por direcao e quantidade exata de tiles
+    DIRECTIONS = [
+        ("DIREITA (→)", +1, 0),
+        ("ESQUERDA (←)", -1, 0),
+        ("BAIXO (↓)", 0, +1),
+        ("CIMA (↑)", 0, -1),
+    ]
+    dir_idx = 0
+
     while len(all_cands) > 1:
-        print(f"\n[Filtro] {len(all_cands)} candidatos encontrados.")
-        print("Ande alguns tiles (1 a 5) em qualquer direcao e pare.")
-        input("Pressione ENTER quando estiver parado...")
+        direction, ddx, ddy = DIRECTIONS[dir_idx % len(DIRECTIONS)]
+        dir_idx += 1
+
+        print(f"\n{'='*55}")
+        print(f"[Filtro] {len(all_cands)} candidatos restantes.")
+        print(f"  Ande exatamente para {direction} e diga quantos tiles.")
+        n_str = input("  Quantos tiles voce andou? (ex: 3): ").strip()
+        try:
+            n = int(n_str)
+        except:
+            print("  Invalido. Tente de novo.")
+            continue
+
+        expected_dx = ddx * n   # quanto X deve mudar
+        expected_dy = ddy * n   # quanto Y deve mudar
 
         filtered = []
-        for ax, ay, az, fmt, last_x, last_y, last_z in all_cands:
+        for c in all_cands:
+            ax, ay, az, fmt = c["ax"], c["ay"], c["az"], c["fmt"]
+            lx, ly = c["lx"], c["ly"]
             nx = read_val(pid, ax, fmt)
             ny = read_val(pid, ay, fmt)
             nz = read_val(pid, az, fmt)
-            
-            if nx is None or ny is None or nz is None:
+            if nx is None or ny is None:
                 continue
 
-            dx = abs(nx - last_x)
-            dy = abs(ny - last_y)
-            dz = abs(nz - last_z)
+            real_dx = nx - lx
+            real_dy = ny - ly
 
-            # O personagem andou. A diferenca de x+y deve ser pequena (>0 e <=10).
-            # Z nao deve mudar ao andar normalmente.
-            if 0 < (dx + dy) <= 10 and dz == 0:
-                filtered.append((ax, ay, az, fmt, nx, ny, nz))
+            print(f"  {hex(ax)}: dx={real_dx:+d} (esperado {expected_dx:+d})  dy={real_dy:+d} (esperado {expected_dy:+d})", end="")
+
+            if real_dx == expected_dx and real_dy == expected_dy:
+                print("  ✓ PASSOU")
+                filtered.append({**c, "lx": nx, "ly": ny, "lz": nz})
+            else:
+                print("  ✗ eliminado")
 
         if not filtered:
-            print("[AVISO] O filtro removeu TODOS os candidatos. Vamos manter a lista anterior e tentar de novo.")
-            # Atualiza os valores conhecidos na lista antiga mesmo falhando, pro caso de algo ter dessincronizado
-            for i in range(len(all_cands)):
-                ax, ay, az, fmt, _, _, _ = all_cands[i]
-                all_cands[i] = (ax, ay, az, fmt, read_val(pid, ax, fmt), read_val(pid, ay, fmt), read_val(pid, az, fmt))
+            print("[AVISO] Nenhum passou! Voce pode ter andado diagonal ou a quantidade estava errada.")
+            print("        Atualizando posicoes e tentando de novo...")
+            for c in all_cands:
+                ax, ay, az, fmt = c["ax"], c["ay"], c["az"], c["fmt"]
+                c["lx"] = read_val(pid, ax, fmt) or c["lx"]
+                c["ly"] = read_val(pid, ay, fmt) or c["ly"]
         else:
             all_cands = filtered
 
-        if len(all_cands) == 1:
-            break
-            
-        print("\nCandidatos restantes:")
-        for i, (ax, ay, az, fmt, nx, ny, nz) in enumerate(all_cands[:10]):
-            label = "uint16" if fmt == "<H" else "uint32"
-            print(f"  [{i}] {label} X={hex(ax)} ({nx}) Y={hex(ay)} ({ny}) Z={hex(az)} ({nz})")
+        print(f"\n  Restam: {len(all_cands)}")
 
-    if len(all_cands) > 1:
-        choice = 0
-        try:
-            choice = int(input(f"\nAinda restam {len(all_cands)}. Escolha o indice [0]: ") or "0")
-        except:
-            choice = 0
-        ax, ay, az, fmt, nx, ny, nz = all_cands[choice]
-    else:
-        ax, ay, az, fmt, nx, ny, nz = all_cands[0]
+    # 7. Monitor ao vivo (todos restantes, ou o unico)
+    print(f"\n[OK] {len(all_cands)} candidato(s) final(is):")
+    for c in all_cands:
+        fmt = c["fmt"]
+        print(f"  X={hex(c['ax'])}  Y={hex(c['ay'])}  Z={hex(c['az'])}  ({fmt})")
 
-    print(f"\n[OK] Candidato escolhido: X={hex(ax)}  Y={hex(ay)}  Z={hex(az)}  ({fmt})")
+    c = all_cands[0]
+    ax, ay, az, fmt = c["ax"], c["ay"], c["az"], c["fmt"]
 
-    # 7. Monitor ao vivo para confirmar
-    print("\n[Monitor] Ande pelo jogo e confirme se os valores mudam corretamente.")
+    print("\n[Monitor] Ande e confirme que X/Y mudam corretamente.")
     print("          X aumenta -> DIREITA | Y aumenta -> BAIXO | CTRL+C para salvar\n")
+
     try:
         while True:
             vx = read_val(pid, ax, fmt)
