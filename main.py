@@ -324,6 +324,7 @@ def select_active_route():
             config = load_config()
             config["waypoints"] = waypoints
             config["active_route"] = selected
+            config.pop("coord_route_file", None) # desativa rota de coords
             save_config(config)
             print(f"[RouteManager] Rota '{selected}' ativada com sucesso! ({len(waypoints)} waypoints)")
             return True
@@ -479,6 +480,7 @@ def select_coord_route():
             config = load_config()
             config["coord_route_file"] = fpath
             config["coord_floor"]      = floor
+            config["active_route"]     = "Nenhuma" # desativa rota de setas
             save_config(config)
             print(f"\n✅ Rota de coordenadas '{fname}' ativa! ({count} waypoints | Floor {floor})")
             return True
