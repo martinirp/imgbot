@@ -221,8 +221,23 @@ def main():
         input(f" 6. Quando parar, pressione ENTER aqui...")
         snap_prev = snap2
         snap2 = take_snapshot(pid, regions)
-        x_candidates = filter_candidates(x_candidates, snap_prev, snap2, delta=+1)
+        new_x = filter_candidates(x_candidates, snap_prev, snap2, delta=+1)
+        if len(new_x) == 0:
+            print(f"[AVISO] Zerou. Mantendo {len(x_candidates)} candidatos da rodada anterior.")
+            break
+        x_candidates = new_x
         print(f"[OK] Filtrado! Restam {len(x_candidates)} candidatos.")
+
+    # VALIDAÇÃO REVERSA: anda pra ESQUERDA para eliminar contadores
+    print(f"\n{'='*55}")
+    print(" VALIDAÇÃO: Eliminando contadores e timers")
+    print(f"{'='*55}")
+    print(f"\n [!] Agora ande {min(rounds+2, 5)} tiles para a ESQUERDA e pare.")
+    print("     (Coordenadas reais devem DIMINUIR. Contadores não diminuem.)")
+    input(" Quando parar, pressione ENTER aqui...")
+    snap_rev = take_snapshot(pid, regions)
+    x_candidates = filter_candidates(x_candidates, snap2, snap_rev, delta=-1)
+    print(f"[OK] Após validação reversa: {len(x_candidates)} candidatos reais de X.")
 
     if not x_candidates:
         print("[ERRO] Nenhum candidato de X encontrado. Tente novamente.")
@@ -257,25 +272,17 @@ def main():
     print(f"[OK] {len(y_candidates)} candidatos para Y encontrados.")
 
     rounds = 0
-    best_y_candidates = y_candidates  # Guarda o melhor resultado caso zere
     while len(y_candidates) > 5 and rounds < 5:
         rounds += 1
         print(f"\n 5. Ande mais 1 tile para BAIXO e pare. (Rodada {rounds})")
-        print("   IMPORTANTE: Ande apenas 1 tile e pare completamente antes de pressionar ENTER.")
         input(f" 6. Quando parar, pressione ENTER aqui...")
         snap_prev = snap_y2
         snap_y2 = take_snapshot(pid, regions)
-        new_candidates = filter_candidates(y_candidates, snap_prev, snap_y2, delta=+1)
-        if len(new_candidates) == 0:
-            print(f"[AVISO] Filtragem zerou os candidatos (você pode ter andado mais de 1 tile).")
-            print(f"        Mantendo os {len(y_candidates)} candidatos da rodada anterior.")
-            break  # Mantém y_candidates como estava
-        y_candidates = new_candidates
-        best_y_candidates = y_candidates
+        y_candidates = filter_candidates(y_candidates, snap_prev, snap_y2, delta=+1)
         print(f"[OK] Filtrado! Restam {len(y_candidates)} candidatos.")
 
     if not y_candidates:
-        print("[ERRO] Nenhum candidato de Y encontrado. Tente novamente.")
+        print("[ERRO] Nenhum candidato de Y encontrado.")
         sys.exit(1)
 
     print(f"\n[RESULTADO] Melhores candidatos para Y:")
