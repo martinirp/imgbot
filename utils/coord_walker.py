@@ -72,18 +72,17 @@ class CoordWalker:
     def _send_arrow(self, dx, dy):
         """
         Envia a seta direcional correta baseado em (dx, dy).
-        Usa numpad para diagonais se disponivel.
         Retorna (delta_x, delta_y) real aplicado.
         """
-        # Decide a direcao dominante (ou diagonal)
         use_diagonal = abs(dx) > 0 and abs(dy) > 0
+        key = ""
 
         if use_diagonal:
-            # Diagonal via numpad
-            if dx > 0 and dy < 0:   key = 'kp_page_up'    # NE
-            elif dx > 0 and dy > 0: key = 'kp_page_down'  # SE
-            elif dx < 0 and dy < 0: key = 'kp_home'       # NO
-            else:                   key = 'kp_end'         # SO
+            # Em Tibia/pyautogui as teclas diagonais sao as de navegacao
+            if dx > 0 and dy < 0:   key = 'pageup'    # NE
+            elif dx > 0 and dy > 0: key = 'pagedown'  # SE
+            elif dx < 0 and dy < 0: key = 'home'      # NO
+            else:                   key = 'end'       # SO
             step_x = 1 if dx > 0 else -1
             step_y = 1 if dy > 0 else -1
         else:
@@ -96,11 +95,14 @@ class CoordWalker:
                 step_x = 0
                 step_y = 1 if dy > 0 else -1
 
-        if self.window_manager:
-            self.window_manager.send_key(key)
-        else:
-            import pyautogui
+        import pyautogui
+        try:
+            # O Tibia no Linux as vezes ignora eventos X11 em background
+            # Usar pyautogui (XTest) garante que a tecla funciona,
+            # mas requer que a janela do jogo esteja em foco.
             pyautogui.press(key)
+        except Exception as e:
+            print(f"[Walker] Erro ao enviar tecla {key}: {e}")
 
         return step_x, step_y
 
