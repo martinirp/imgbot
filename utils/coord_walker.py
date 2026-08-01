@@ -56,7 +56,7 @@ class CoordWalker:
         self.current_pos     = None      # (x, y, z) ultima posicao conhecida
         self.last_walk_time  = 0.0
         self.last_track_time = 0.0
-        self.track_interval  = 1.5       # segundos entre atualizacoes de posicao
+        self.track_interval  = 0.3       # leitura frequente da memoria = sem bouncing
         self._server_online  = True      # tenta push; desiste se falhar muito
 
         # pixels_per_tile: quantos pixels de tela = 1 tile do jogo no minimap
