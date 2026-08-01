@@ -213,35 +213,69 @@ def main():
     # 4. Busca na memoria
     cands_16, cands_32 = find_xyz_addresses(pid, regions, tx, ty, tz)
 
-    # 5. Mostra resultados
+    # 5. Inicializa lista com ultimos valores conhecidos
     all_cands = []
-    for ax, ay, az in cands_16[:20]:
-        all_cands.append((ax, ay, az, "<H"))
-    for ax, ay, az in cands_32[:20]:
-        all_cands.append((ax, ay, az, "<I"))
+    for ax, ay, az in cands_16:
+        all_cands.append((ax, ay, az, "<H", tx, ty, tz))
+    for ax, ay, az in cands_32:
+        all_cands.append((ax, ay, az, "<I", tx, ty, tz))
 
     if not all_cands:
         print("\n[ERRO] Nenhum candidato encontrado.")
-        print("Dica: tente mover o personagem 1 tile e rode novamente.")
+        print("Dica: verifique se as coordenadas iniciais estao corretas.")
         sys.exit(1)
 
-    print(f"\n[Resultado] {len(all_cands)} candidatos encontrados:\n")
-    for i, (ax, ay, az, fmt) in enumerate(all_cands[:15]):
-        label = "uint16" if fmt == "<H" else "uint32"
-        vx = read_val(pid, ax, fmt)
-        vy = read_val(pid, ay, fmt)
-        vz = read_val(pid, az, fmt)
-        print(f"  [{i:2d}] {label}  X={hex(ax)} ({vx})  Y={hex(ay)} ({vy})  Z={hex(az)} ({vz})")
+    # 6. Filtro interativo
+    while len(all_cands) > 1:
+        print(f"\n[Filtro] {len(all_cands)} candidatos encontrados.")
+        print("Ande alguns tiles (1 a 5) em qualquer direcao e pare.")
+        input("Pressione ENTER quando estiver parado...")
 
-    # 6. Usuario escolhe
-    choice = 0
+        filtered = []
+        for ax, ay, az, fmt, last_x, last_y, last_z in all_cands:
+            nx = read_val(pid, ax, fmt)
+            ny = read_val(pid, ay, fmt)
+            nz = read_val(pid, az, fmt)
+            
+            if nx is None or ny is None or nz is None:
+                continue
+
+            dx = abs(nx - last_x)
+            dy = abs(ny - last_y)
+            dz = abs(nz - last_z)
+
+            # O personagem andou. A diferenca de x+y deve ser pequena (>0 e <=10).
+            # Z nao deve mudar ao andar normalmente.
+            if 0 < (dx + dy) <= 10 and dz == 0:
+                filtered.append((ax, ay, az, fmt, nx, ny, nz))
+
+        if not filtered:
+            print("[AVISO] O filtro removeu TODOS os candidatos. Vamos manter a lista anterior e tentar de novo.")
+            # Atualiza os valores conhecidos na lista antiga mesmo falhando, pro caso de algo ter dessincronizado
+            for i in range(len(all_cands)):
+                ax, ay, az, fmt, _, _, _ = all_cands[i]
+                all_cands[i] = (ax, ay, az, fmt, read_val(pid, ax, fmt), read_val(pid, ay, fmt), read_val(pid, az, fmt))
+        else:
+            all_cands = filtered
+
+        if len(all_cands) == 1:
+            break
+            
+        print("\nCandidatos restantes:")
+        for i, (ax, ay, az, fmt, nx, ny, nz) in enumerate(all_cands[:10]):
+            label = "uint16" if fmt == "<H" else "uint32"
+            print(f"  [{i}] {label} X={hex(ax)} ({nx}) Y={hex(ay)} ({ny}) Z={hex(az)} ({nz})")
+
     if len(all_cands) > 1:
+        choice = 0
         try:
-            choice = int(input(f"\nEscolha o candidato mais provavel [0]: ") or "0")
-        except Exception:
+            choice = int(input(f"\nAinda restam {len(all_cands)}. Escolha o indice [0]: ") or "0")
+        except:
             choice = 0
+        ax, ay, az, fmt, nx, ny, nz = all_cands[choice]
+    else:
+        ax, ay, az, fmt, nx, ny, nz = all_cands[0]
 
-    ax, ay, az, fmt = all_cands[choice]
     print(f"\n[OK] Candidato escolhido: X={hex(ax)}  Y={hex(ay)}  Z={hex(az)}  ({fmt})")
 
     # 7. Monitor ao vivo para confirmar
