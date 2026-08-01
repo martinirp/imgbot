@@ -1,15 +1,20 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 find_coords_by_value.py - Acha os enderecos de X, Y, Z na memoria do Tibia
 usando as coordenadas conhecidas do template matching como ancora.
 
-Uso: sudo ./venv/bin/python3 find_coords_by_value.py
+Uso: sudo DISPLAY=:0 ./venv/bin/python3 find_coords_by_value.py
 """
 
 import os, sys, struct, time, json, subprocess
 import numpy as np
 
+# sudo limpa o DISPLAY -- garante que mss consegue conectar ao X11
+if not os.environ.get("DISPLAY"):
+    os.environ["DISPLAY"] = ":0"
+
 CONFIG_FILE = "config.json"
+
 
 def find_tibia_pid():
     for pattern in ["Tibia/bin/client", "tibia", "Tibia"]:
