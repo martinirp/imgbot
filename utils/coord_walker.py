@@ -51,6 +51,13 @@ class CoordWalker:
         self.track_interval  = 1.5       # segundos entre atualizacoes de posicao
         self._server_online  = True      # tenta push; desiste se falhar muito
 
+        # pixels_per_tile: quantos pixels de tela = 1 tile do jogo no minimap
+        # minimap_scale = 0.5 -> cliente zoomed in -> 1 tile = 2px na tela
+        from utils.calibrator import load_config
+        cfg = load_config()
+        scale = float(cfg.get("minimap_scale", 1.0))
+        self.pixels_per_tile = 1.0 / scale if scale > 0 else 1.0
+
     # ─────────────────────────────────────────────────────────
     #  Click no minimap
     # ─────────────────────────────────────────────────────────
@@ -63,15 +70,15 @@ class CoordWalker:
     def _calc_minimap_click(self, char_x, char_y, target_x, target_y):
         """
         Converte coordenadas de destino em pixel de clique no minimap.
-        Escala: 1 tile do jogo = 1 pixel no minimap.
+        Usa pixels_per_tile para corrigir o zoom do cliente.
         O minimap e centralizado no personagem.
         """
         rx, ry, rw, rh = self.roi
         cx_screen = rx + rw // 2
         cy_screen = ry + rh // 2
 
-        dx = target_x - char_x
-        dy = target_y - char_y
+        dx = (target_x - char_x) * self.pixels_per_tile
+        dy = (target_y - char_y) * self.pixels_per_tile
 
         # Limita ao raio seguro do minimap (com margem de 8px da borda)
         max_r = min(rw, rh) // 2 - 8
