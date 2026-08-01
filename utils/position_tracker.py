@@ -38,6 +38,14 @@ class PositionTracker:
         self.roi = minimap_roi
         self.loader = MapLoader(minimap_dir)
 
+        # Escala do minimap: 1.0 = 1px por tile (padrao).
+        # Se o zoom do cliente for diferente, ajustar no config.json (minimap_scale)
+        from utils.calibrator import load_config
+        cfg = load_config()
+        self.scale = float(cfg.get("minimap_scale", 1.0))
+        if self.scale != 1.0:
+            print(f"[PositionTracker] Escala do minimap: {self.scale}x")
+
         self.last_pos = None          # (x, y, z) ultima posicao conhecida
         self.last_confidence = 0.0
         self.last_update_time = 0
@@ -104,7 +112,7 @@ class PositionTracker:
     #  Extracao do minimap
     # ─────────────────────────────────────────────────────────
     def _extract_minimap(self, full_frame):
-        """Recorta a area do minimap da tela e retorna imagem BGR."""
+        """Recorta a area do minimap da tela, converte para BGR e aplica escala se necessario."""
         if full_frame is None:
             return None
         x, y, w, h = self.roi
@@ -114,6 +122,11 @@ class PositionTracker:
         # Converte para BGR se necessario
         if len(crop.shape) == 2:
             crop = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
+        # Aplica fator de escala para corrigir zoom do cliente
+        if self.scale != 1.0:
+            nw = max(1, int(crop.shape[1] * self.scale))
+            nh = max(1, int(crop.shape[0] * self.scale))
+            crop = cv2.resize(crop, (nw, nh), interpolation=cv2.INTER_AREA)
         return crop.copy()
 
     # ─────────────────────────────────────────────────────────

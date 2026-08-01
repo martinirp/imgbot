@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     "attack_hotkey": "space",
     "battle_roi": [100, 100, 180, 200],
     "minimap_roi": [1000, 50, 150, 150],
+    "minimap_scale": 1.0,
     "min_health_pixels": 25,
     "min_edge_pixels": 200,
     "walk_delay": 0.8,
