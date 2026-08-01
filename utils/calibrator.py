@@ -68,6 +68,8 @@ def select_region(title="Selecione a Regiao"):
     print("Instruções: Desenhe um retângulo na área desejada e aperte ENTER ou ESPAÇO. (ESC para cancelar).")
     print(f"==================================================\n")
     
+    cv2.namedWindow(title, cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty(title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     roi = cv2.selectROI(title, frame, showCrosshair=True, fromCenter=False)
     cv2.destroyWindow(title)
     
