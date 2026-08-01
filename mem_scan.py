@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-mem_scan.py - Encontra automaticamente os endereços de memória das coordenadas X, Y do Tibia.
-Uso: sudo python3 mem_scan.py
+mem_scan.py - Encontra automaticamente os endereços de memória das coordenadas X, Y, Z do Tibia.
+Uso: sudo ./venv/bin/python mem_scan.py
 """
 
 import os
@@ -21,11 +21,9 @@ except ImportError:
 CONFIG_FILE = "config.json"
 
 def find_tibia_pid():
-    """Encontra o PID do processo do Tibia automaticamente."""
     try:
         result = subprocess.check_output(["pgrep", "-f", "Tibia/bin/client"], text=True).strip()
         pids = result.splitlines()
-        # Pega o processo com maior uso de memória (o jogo principal)
         best_pid = None
         best_mem = 0
         for pid in pids:
@@ -48,10 +46,6 @@ def find_tibia_pid():
         return None
 
 def get_scan_regions(pid):
-    """
-    Lê /proc/PID/maps e retorna apenas regiões anônimas de leitura/escrita (heap/stack/data).
-    Ignora bibliotecas .so mapeadas em arquivo.
-    """
     regions = []
     try:
         with open(f"/proc/{pid}/maps", "r") as f:
@@ -61,16 +55,13 @@ def get_scan_regions(pid):
                     continue
                 addr_range = parts[0]
                 perms = parts[1]
-                # Arquivo mapeado (biblioteca, etc.) - pula
                 pathname = parts[5] if len(parts) > 5 else ""
                 if pathname and pathname != "[heap]" and pathname != "[stack]":
                     continue
-                # Só regiões leitura+escrita (rw) sem execução
                 if 'r' not in perms or 'w' not in perms:
                     continue
                 start, end = [int(x, 16) for x in addr_range.split('-')]
                 size = end - start
-                # Ignora regiões muito grandes (> 200MB) ou muito pequenas (< 4KB)
                 if size > 200 * 1024 * 1024 or size < 4096:
                     continue
                 regions.append((start, end))
@@ -79,7 +70,6 @@ def get_scan_regions(pid):
     return regions
 
 def take_snapshot(pid, regions):
-    """Lê todas as regiões de memória e retorna um dicionário {start_addr: bytes}."""
     snapshot = {}
     try:
         with open(f"/proc/{pid}/mem", "rb") as mem_file:
@@ -92,77 +82,65 @@ def take_snapshot(pid, regions):
                 except Exception:
                     pass
     except PermissionError:
-        print("[ERRO] Permissão negada para ler a memória do processo.")
-        print("       Execute este script com: sudo python3 mem_scan.py")
+        print("[ERRO] Permissão negada. Execute com: sudo ./venv/bin/python mem_scan.py")
         sys.exit(1)
     except Exception as e:
         print(f"[ERRO] Falha ao ler memória: {e}")
     return snapshot
 
-def find_candidates(snapshot_before, snapshot_after, delta, dtype=np.uint16 if HAS_NUMPY else None):
-    """
-    Encontra endereços onde o valor mudou exatamente por 'delta'.
-    Retorna lista de (endereço_absoluto, valor_antes, valor_depois).
-    """
+def find_candidates(snap_before, snap_after, delta):
+    """Encontra endereços onde uint16 mudou exatamente por 'delta'."""
     candidates = []
-    size = 2  # uint16 = 2 bytes
-
-    for start, data_before in snapshot_before.items():
-        if start not in snapshot_after:
+    size = 2
+    for start, data_before in snap_before.items():
+        if start not in snap_after:
             continue
-        data_after = snapshot_after[start]
-        min_len = min(len(data_before), len(data_after))
-
+        data_after = snap_after[start]
+        min_len = min(len(data_before), len(data_after)) & ~1
         if HAS_NUMPY:
-            # Versão rápida com NumPy
-            arr_before = np.frombuffer(data_before[:min_len & ~1], dtype=np.uint16).astype(np.int32)
-            arr_after  = np.frombuffer(data_after[:min_len & ~1],  dtype=np.uint16).astype(np.int32)
-            diff = arr_after - arr_before
-            indices = np.where(diff == delta)[0]
+            arr_before = np.frombuffer(data_before[:min_len], dtype=np.uint16).astype(np.int32)
+            arr_after  = np.frombuffer(data_after[:min_len],  dtype=np.uint16).astype(np.int32)
+            indices = np.where(arr_after - arr_before == delta)[0]
             for idx in indices:
-                byte_offset = int(idx) * size
-                addr = start + byte_offset
-                v1 = int(arr_before[idx])
-                v2 = int(arr_after[idx])
-                candidates.append((addr, v1, v2))
+                candidates.append((start + int(idx)*size, int(arr_before[idx]), int(arr_after[idx])))
         else:
-            # Versão lenta sem NumPy
-            for i in range(0, min_len - size, size):
+            for i in range(0, min_len, size):
                 v1 = struct.unpack_from('<H', data_before, i)[0]
                 v2 = struct.unpack_from('<H', data_after, i)[0]
                 if int(v2) - int(v1) == delta:
                     candidates.append((start + i, v1, v2))
-
     return candidates
 
-def filter_candidates(candidates, snapshot_before, snapshot_after, delta):
-    """Filtra a lista de candidatos existente para os que mudaram por 'delta' novamente."""
+def filter_candidates(candidates, snap_before, snap_after, delta):
+    """Filtra candidatos existentes pelos que mudaram por 'delta' entre dois snapshots."""
     filtered = []
     size = 2
+    # Monta índice rápido para lookup
+    snap_index = {start: data for start, data in snap_before.items()}
+    snap_after_index = {start: data for start, data in snap_after.items()}
 
     for addr, _, _ in candidates:
-        # Encontra qual região contém esse endereço
-        for start, data_before in snapshot_before.items():
+        found = False
+        for start, data_before in snap_index.items():
             end = start + len(data_before)
             if start <= addr < end:
                 offset = addr - start
                 if offset + size > len(data_before):
                     break
-                if start not in snapshot_after:
+                if start not in snap_after_index:
                     break
-                data_after = snapshot_after[start]
+                data_after = snap_after_index[start]
                 if offset + size > len(data_after):
                     break
                 v1 = struct.unpack_from('<H', data_before, offset)[0]
                 v2 = struct.unpack_from('<H', data_after, offset)[0]
                 if int(v2) - int(v1) == delta:
                     filtered.append((addr, v1, v2))
+                found = True
                 break
-
     return filtered
 
 def read_value_at(pid, addr, dtype='<H'):
-    """Lê o valor atual em um endereço de memória."""
     size = struct.calcsize(dtype)
     try:
         with open(f"/proc/{pid}/mem", "rb") as mem_file:
@@ -172,143 +150,204 @@ def read_value_at(pid, addr, dtype='<H'):
     except Exception:
         return None
 
+def scan_coord(pid, regions, axis_name, direction_pos, direction_neg):
+    """
+    Escaneia a memória para encontrar o endereço de uma coordenada.
+    Usa comparação cumulativa (sempre compara contra o snapshot base).
+    Depois valida com direção reversa para eliminar contadores.
+    """
+    print(f"\n{'='*55}")
+    print(f" PASSO: ENCONTRANDO COORDENADA {axis_name}")
+    print(f"{'='*55}")
+
+    print(f"\n 1. Deixe o personagem PARADO.")
+    input(f" 2. Pressione ENTER aqui...")
+    snap_base = take_snapshot(pid, regions)
+
+    print(f"\n 3. Ande 1-2 tiles para {direction_pos} e pare.")
+    input(f" 4. Quando parar, pressione ENTER aqui...")
+    snap_cur = take_snapshot(pid, regions)
+    total_moved = 1
+
+    candidates = find_candidates(snap_base, snap_cur, delta=+1)
+    # Tenta delta=2 caso tenha andado 2 tiles
+    if len(candidates) > 5000:
+        c2 = find_candidates(snap_base, snap_cur, delta=+2)
+        if 0 < len(c2) < len(candidates):
+            candidates = c2
+            total_moved = 2
+    print(f"[OK] {len(candidates)} candidatos encontrados.")
+
+    rounds = 0
+    while len(candidates) > 5 and rounds < 6:
+        rounds += 1
+        print(f"\n 5. Ande mais 1-2 tiles para {direction_pos} e pare. (Rodada {rounds})")
+        input(f" 6. Quando parar, pressione ENTER aqui...")
+        snap_cur = take_snapshot(pid, regions)
+
+        # Tenta vários deltas cumulativos
+        best_new = []
+        for try_delta in [total_moved + 1, total_moved + 2, total_moved + 3]:
+            new_c = filter_candidates(candidates, snap_base, snap_cur, delta=try_delta)
+            if len(new_c) > 0:
+                best_new = new_c
+                total_moved = try_delta
+                break
+
+        if not best_new:
+            print(f"[AVISO] Rodada não filtrou. Mantendo {len(candidates)} candidatos.")
+        else:
+            candidates = best_new
+            print(f"[OK] Filtrado! Restam {len(candidates)} candidatos. (Total ~{total_moved} tiles)")
+
+    # Validação reversa: elimina contadores
+    print(f"\n{'='*55}")
+    print(f" VALIDAÇÃO REVERSA ({axis_name}): eliminando contadores")
+    print(f"{'='*55}")
+    print(f"\n [!] Ande {total_moved} tiles para {direction_neg} e pare.")
+    print(f"     Coordenadas reais DIMINUEM. Contadores não diminuem.")
+    input(f" Quando parar, pressione ENTER aqui...")
+    snap_rev = take_snapshot(pid, regions)
+
+    validated = filter_candidates(candidates, snap_cur, snap_rev, delta=-1)
+    if not validated:
+        # Tenta com delta maior (pode ter andado mais tiles na validação)
+        for try_neg in [-2, -3]:
+            validated = filter_candidates(candidates, snap_cur, snap_rev, delta=try_neg)
+            if validated:
+                break
+
+    if validated:
+        candidates = validated
+        print(f"[OK] Após validação reversa: {len(candidates)} candidatos reais de {axis_name}.")
+    else:
+        print(f"[AVISO] Validação reversa zerou. Mantendo {len(candidates)} candidatos.")
+
+    if not candidates:
+        print(f"[ERRO] Nenhum candidato de {axis_name} encontrado.")
+        return None
+
+    print(f"\n[RESULTADO] Candidatos para {axis_name}:")
+    for i, (addr, v1, v2) in enumerate(candidates[:10]):
+        cur = read_value_at(pid, addr)
+        print(f"  [{i}] {hex(addr)} | Valor atual: {cur}")
+
+    chosen_addr = candidates[0][0]
+    if len(candidates) > 1:
+        try:
+            choice = int(input(f"\nEscolha o índice [0]: ") or "0")
+            chosen_addr = candidates[choice][0]
+        except Exception:
+            pass
+
+    print(f"[OK] Endereço {axis_name} definido: {hex(chosen_addr)}")
+    return chosen_addr
+
+def scan_z(pid, regions):
+    """Escaneia Z usando mudança de andar (escadas/buracos)."""
+    print(f"\n{'='*55}")
+    print(f" PASSO: ENCONTRANDO COORDENADA Z (ANDAR)")
+    print(f"{'='*55}")
+    print("\n Vá até uma ESCADA ou BURACO.")
+    print(" Deixe o personagem PARADO no andar atual.")
+    input(" Pressione ENTER aqui...")
+    snap_z1 = take_snapshot(pid, regions)
+
+    print("\n Suba ou desça 1 ANDAR pela escada.")
+    input(" Quando chegar no outro andar, pressione ENTER aqui...")
+    snap_z2 = take_snapshot(pid, regions)
+
+    z_pos = find_candidates(snap_z1, snap_z2, delta=+1)
+    z_neg = find_candidates(snap_z1, snap_z2, delta=-1)
+
+    if len(z_neg) < len(z_pos) and len(z_neg) > 0:
+        z_candidates = z_neg
+        z_direction = -1
+    else:
+        z_candidates = z_pos
+        z_direction = +1
+    print(f"[OK] {len(z_candidates)} candidatos para Z.")
+
+    print(f"\n [!] Volte ao andar original pela escada.")
+    input(" Quando chegar, pressione ENTER aqui...")
+    snap_z_rev = take_snapshot(pid, regions)
+    z_validated = filter_candidates(z_candidates, snap_z2, snap_z_rev, delta=-z_direction)
+    if z_validated:
+        z_candidates = z_validated
+        print(f"[OK] Após validação: {len(z_candidates)} candidatos de Z.")
+    else:
+        print(f"[AVISO] Validação zerou. Mantendo {len(z_candidates)} candidatos.")
+
+    if not z_candidates:
+        print("[AVISO] Z não encontrado.")
+        return None
+
+    print(f"\n[RESULTADO] Candidatos para Z:")
+    for i, (addr, v1, v2) in enumerate(z_candidates[:10]):
+        cur = read_value_at(pid, addr)
+        print(f"  [{i}] {hex(addr)} | Valor atual: {cur}")
+
+    z_addr = z_candidates[0][0]
+    if len(z_candidates) > 1:
+        try:
+            choice = int(input(f"\nEscolha o índice do Z [0]: ") or "0")
+            z_addr = z_candidates[choice][0]
+        except Exception:
+            pass
+
+    print(f"[OK] Endereço Z definido: {hex(z_addr)}")
+    return z_addr
+
 def main():
     print("=" * 55)
     print("   SCANNER DE COORDENADAS DO TIBIA NA MEMÓRIA")
     print("=" * 55)
 
-    # 1. Encontra o PID do Tibia
     pid = find_tibia_pid()
     if not pid:
-        print("[ERRO] Processo do Tibia não encontrado!")
-        print("       Certifique-se que o jogo está aberto.")
+        print("[ERRO] Processo do Tibia não encontrado! O jogo está aberto?")
         sys.exit(1)
     print(f"\n[OK] Tibia encontrado! PID: {pid}")
 
-    # 2. Lê as regiões de memória relevantes
     print("[...] Lendo mapa de memória do processo...")
     regions = get_scan_regions(pid)
     if not regions:
         print("[ERRO] Nenhuma região de memória encontrada.")
         sys.exit(1)
     total_mb = sum(e - s for s, e in regions) / 1024 / 1024
-    print(f"[OK] {len(regions)} regiões encontradas ({total_mb:.1f} MB para escanear)")
+    print(f"[OK] {len(regions)} regiões ({total_mb:.1f} MB para escanear)\n")
 
-    print("\n" + "=" * 55)
-    print(" PASSO 1: ENCONTRANDO COORDENADA X")
-    print("=" * 55)
-    print("\n 1. Deixe o personagem PARADO no jogo.")
-    input(" 2. Quando estiver parado, pressione ENTER aqui...")
-
-    print("[...] Capturando snapshot inicial da memória...")
-    snap1 = take_snapshot(pid, regions)
-    print("[OK] Snapshot 1 capturado!")
-
-    print("\n 3. Ande exatamente 1 tile para a DIREITA e pare.")
-    input(" 4. Quando parar, pressione ENTER aqui...")
-
-    print("[...] Capturando snapshot 2...")
-    snap2 = take_snapshot(pid, regions)
-    print(f"[...] Comparando snapshots (procurando valores que aumentaram em +1)...")
-    x_candidates = find_candidates(snap1, snap2, delta=+1)
-    print(f"[OK] {len(x_candidates)} candidatos para X encontrados.")
-
-    # Repete para filtrar mais
-    rounds = 0
-    while len(x_candidates) > 5 and rounds < 5:
-        rounds += 1
-        print(f"\n 5. Ande mais 1 tile para a DIREITA e pare. (Rodada {rounds})")
-        input(f" 6. Quando parar, pressione ENTER aqui...")
-        snap_prev = snap2
-        snap2 = take_snapshot(pid, regions)
-        new_x = filter_candidates(x_candidates, snap_prev, snap2, delta=+1)
-        if len(new_x) == 0:
-            print(f"[AVISO] Zerou. Mantendo {len(x_candidates)} candidatos da rodada anterior.")
-            break
-        x_candidates = new_x
-        print(f"[OK] Filtrado! Restam {len(x_candidates)} candidatos.")
-
-    # VALIDAÇÃO REVERSA: anda pra ESQUERDA para eliminar contadores
-    print(f"\n{'='*55}")
-    print(" VALIDAÇÃO: Eliminando contadores e timers")
-    print(f"{'='*55}")
-    print(f"\n [!] Agora ande {min(rounds+2, 5)} tiles para a ESQUERDA e pare.")
-    print("     (Coordenadas reais devem DIMINUIR. Contadores não diminuem.)")
-    input(" Quando parar, pressione ENTER aqui...")
-    snap_rev = take_snapshot(pid, regions)
-    x_candidates = filter_candidates(x_candidates, snap2, snap_rev, delta=-1)
-    print(f"[OK] Após validação reversa: {len(x_candidates)} candidatos reais de X.")
-
-    if not x_candidates:
-        print("[ERRO] Nenhum candidato de X encontrado. Tente novamente.")
+    x_addr = scan_coord(pid, regions, "X", "DIREITA (→)", "ESQUERDA (←)")
+    if not x_addr:
         sys.exit(1)
 
-    print(f"\n[RESULTADO] Melhores candidatos para X:")
-    for i, (addr, v1, v2) in enumerate(x_candidates[:10]):
-        print(f"  [{i}] Endereço: {hex(addr)} | Valor atual: {v2}")
-
-    x_addr = x_candidates[0][0]
-    if len(x_candidates) > 1:
-        try:
-            choice = int(input(f"\nEscolha o índice do endereço correto [0]: ") or "0")
-            x_addr = x_candidates[choice][0]
-        except Exception:
-            pass
-
-    print(f"\n[OK] Endereço X definido: {hex(x_addr)}")
-
-    print("\n" + "=" * 55)
-    print(" PASSO 2: ENCONTRANDO COORDENADA Y")
-    print("=" * 55)
-
-    print("\n 1. Deixe o personagem PARADO.")
-    input(" 2. Quando estiver parado, pressione ENTER aqui...")
-    snap_y_base = take_snapshot(pid, regions)  # Snapshot base para comparação cumulativa
-
-    print("\n 3. Ande exatamente 1 tile para BAIXO e pare.")
-    input(" 4. Quando parar, pressione ENTER aqui...")
-    snap_y_cur = take_snapshot(pid, regions)
-    y_candidates = find_candidates(snap_y_base, snap_y_cur, delta=+1)
-    print(f"[OK] {len(y_candidates)} candidatos para Y encontrados.")
-
-    rounds = 0
-    while len(y_candidates) > 5 and rounds < 5:
-        rounds += 1
-        print(f"\n 5. Ande mais 1 tile para BAIXO e pare. (Rodada {rounds})")
-        input(f" 6. Quando parar, pressione ENTER aqui...")
-        snap_prev = snap_y2
-        snap_y2 = take_snapshot(pid, regions)
-        y_candidates = filter_candidates(y_candidates, snap_prev, snap_y2, delta=+1)
-        print(f"[OK] Filtrado! Restam {len(y_candidates)} candidatos.")
-
-    if not y_candidates:
-        print("[ERRO] Nenhum candidato de Y encontrado.")
+    y_addr = scan_coord(pid, regions, "Y", "BAIXO (↓)", "CIMA (↑)")
+    if not y_addr:
         sys.exit(1)
 
-    print(f"\n[RESULTADO] Melhores candidatos para Y:")
-    for i, (addr, v1, v2) in enumerate(y_candidates[:10]):
-        print(f"  [{i}] Endereço: {hex(addr)} | Valor atual: {v2}")
+    z_resp = input("\nDeseja escanear o Z (andar/floor) também? (s/n): ").strip().lower()
+    z_addr = None
+    if z_resp == 's':
+        z_addr = scan_z(pid, regions)
 
-    y_addr = y_candidates[0][0]
-    if len(y_candidates) > 1:
-        try:
-            choice = int(input(f"\nEscolha o índice do endereço correto [0]: ") or "0")
-            y_addr = y_candidates[choice][0]
-        except Exception:
-            pass
-
-    print(f"[OK] Endereço Y definido: {hex(y_addr)}")
-
-    # Verificação final
+    # Monitor ao vivo
     print("\n" + "=" * 55)
-    print(" VERIFICAÇÃO FINAL")
+    print(" VERIFICAÇÃO FINAL (Ctrl+C para parar e salvar)")
     print("=" * 55)
-    print("Ande alguns tiles e veja se os valores mudam corretamente:")
-    for _ in range(5):
-        x_val = read_value_at(pid, x_addr)
-        y_val = read_value_at(pid, y_addr)
-        print(f"  X = {x_val} | Y = {y_val}")
-        time.sleep(0.5)
+    print(" Ande pelos tiles para verificar:")
+    print("   X aumenta → DIREITA, diminui → ESQUERDA")
+    print("   Y aumenta → BAIXO,   diminui → CIMA")
+    if z_addr:
+        print("   Z muda ao subir/descer andares\n")
+    try:
+        while True:
+            x_val = read_value_at(pid, x_addr)
+            y_val = read_value_at(pid, y_addr)
+            z_val = read_value_at(pid, z_addr) if z_addr else "N/A"
+            print(f"  X={x_val} | Y={y_val} | Z={z_val}    ", end='\r', flush=True)
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\n[OK] Monitor encerrado.")
 
     # Salva no config.json
     config = {}
@@ -322,13 +361,17 @@ def main():
     config["mem_pid"] = pid
     config["mem_x_addr"] = x_addr
     config["mem_y_addr"] = y_addr
+    if z_addr:
+        config["mem_z_addr"] = z_addr
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
     print(f"\n[OK] Endereços salvos no config.json!")
-    print(f"     X addr: {hex(x_addr)}")
-    print(f"     Y addr: {hex(y_addr)}")
+    print(f"     X: {hex(x_addr)}")
+    print(f"     Y: {hex(y_addr)}")
+    if z_addr:
+        print(f"     Z: {hex(z_addr)}")
     print("\nAgora o bot pode ler as coordenadas em tempo real!")
 
 if __name__ == "__main__":
